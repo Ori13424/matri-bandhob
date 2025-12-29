@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getDatabase, Database } from "firebase/database";
 import { getStorage, FirebaseStorage } from "firebase/storage";
+import { getAuth } from "firebase/auth";
 
 // Interface for strictly typed config
 interface FirebaseConfig {
@@ -37,5 +38,6 @@ if (!getApps().length) {
 const db: Firestore = getFirestore(app);
 const rtdb: Database = getDatabase(app);
 const storage: FirebaseStorage = getStorage(app);
+export const auth = getAuth(app);
 
 export { app, db, rtdb, storage };

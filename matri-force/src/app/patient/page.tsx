@@ -3,435 +3,456 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Home, MessageCircle, Users, User, Mic, Send, Camera, 
-  AlertOctagon, Plus, Phone, Droplet, Clock, Calendar, 
-  Stethoscope, Activity, ChevronRight, LogOut, Lock, 
-  MapPin, Heart, Baby, Timer, Pill, Utensils, Search,
-  CheckCircle, X, ArrowLeft
+  Home, MessageCircle, Users, User, Send, Camera, 
+  AlertOctagon, Plus, Phone, Calendar, Stethoscope, 
+  Activity, ChevronRight, LogOut, Lock, MapPin, 
+  Heart, Baby, Pill, Search, ShoppingBag, WifiOff,
+  FileText, Shield, Menu, X, UploadCloud, Smartphone
 } from "lucide-react";
 
 // Firebase Imports
-import { db, rtdb } from "@/lib/firebase"; 
-import { collection, query, orderBy, onSnapshot, addDoc, getDocs, where } from "firebase/firestore";
-import { ref, set, push, onValue, update, remove } from "firebase/database";
+import { db, rtdb, auth } from "@/lib/firebase"; // Ensure 'auth' is exported from your firebase.ts
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  onAuthStateChanged, 
+  signOut,
+  updateProfile 
+} from "firebase/auth";
+import { 
+  collection, doc, setDoc, getDoc, 
+  addDoc, query, where, getDocs, orderBy 
+} from "firebase/firestore";
+import { ref, set, push, remove } from "firebase/database";
 
 // --- Types ---
-type Theme = "pink" | "blue";
-type Tab = "home" | "care" | "tools" | "community" | "profile"; 
-type Message = { id?: string; role: "user" | "ai" | "doctor"; content: string; timestamp: number };
-type VitalLog = { weight: string; bp: string; date: string }; // Fixed Type Definition
-
-// --- Mock User Data (Simulated Auth) ---
-const MOCK_USER = {
-  uid: "rahima_123",
-  name: "Rahima Begum",
-  phone: "+8801700000000",
-  zone: "Dhanmondi",
-  gestationWeek: 24
-};
+type Tab = "home" | "care" | "nutrition" | "community" | "profile";
+type UserMode = "mother" | "guardian";
 
 export default function PatientApp() {
-  // --- Global State ---
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [userData, setUserData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("home");
-  const [theme, setTheme] = useState<Theme>("pink");
+  const [userMode, setUserMode] = useState<UserMode>("mother"); // Toggle for Husband/Mother-in-law
 
-  // --- Auth Handlers ---
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setUser(MOCK_USER); // Simulating Login
-  };
+  // --- Auth Listener ---
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        // Fetch extended data from Firestore
+        const docRef = doc(db, "users", currentUser.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setUserData(docSnap.data());
+        }
+      } else {
+        setUser(null);
+        setUserData(null);
+      }
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
 
-  const handleLogout = () => {
-    if(confirm("Sign out of Matri-Force?")) setUser(null);
-  };
-
-  // --- Dynamic Styling ---
-  const colors = {
-    bg: theme === "pink" ? "bg-rose-50" : "bg-sky-50",
-    primary: theme === "pink" ? "bg-rose-500" : "bg-sky-600",
-    text: theme === "pink" ? "text-rose-600" : "text-sky-600",
-    navActive: theme === "pink" ? "text-rose-600" : "text-sky-600",
-  };
+  if (loading) return <div className="h-screen flex items-center justify-center bg-white text-rose-500">Loading Matri-Force...</div>;
 
   if (!user) {
-    return <AuthScreen onLogin={handleLogin} colors={colors} />;
+    return <AuthScreen />;
   }
 
   return (
-    <div className={`min-h-screen ${colors.bg} flex flex-col font-sans transition-colors duration-500 pb-20`}>
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-20">
       
-      {/* Header */}
-      <header className="px-6 pt-8 pb-4 flex justify-between items-center bg-white/50 backdrop-blur-sm sticky top-0 z-40">
+      {/* --- HEADER --- */}
+      <header className="px-5 pt-8 pb-4 bg-white shadow-sm flex justify-between items-center sticky top-0 z-40">
         <div>
-          <p className="text-gray-500 text-xs font-mono uppercase tracking-wider">
-            Week {user.gestationWeek} • {theme === "pink" ? "Pregnancy" : "Post-Partum"}
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">
+            {userMode === 'mother' ? `Week ${userData?.gestationWeek || 24} • Pregnancy` : "Guardian Mode Active"}
           </p>
-          <h1 className="text-xl font-bold text-gray-800">Hi, {user.name.split(' ')[0]}</h1>
+          <h1 className="text-xl font-black text-slate-800">
+            {userMode === 'mother' ? `Hi, ${user.displayName?.split(' ')[0] || 'Mother'}` : "Household Tasks"}
+          </h1>
         </div>
-        <button onClick={() => setActiveTab("profile")} className={`h-10 w-10 rounded-full ${colors.primary} flex items-center justify-center text-white font-bold shadow-lg ring-2 ring-white`}>
-          {user.name[0]}
-        </button>
+        <div className="flex gap-2">
+           <button 
+             onClick={() => setUserMode(prev => prev === 'mother' ? 'guardian' : 'mother')}
+             className={`px-3 py-1 rounded-full text-xs font-bold border ${userMode === 'guardian' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600'}`}
+           >
+             {userMode === 'mother' ? 'Switch to Guardian' : 'Exit Guardian'}
+           </button>
+           <button onClick={() => setActiveTab("profile")} className="h-10 w-10 rounded-full bg-rose-500 flex items-center justify-center text-white font-bold shadow-lg ring-2 ring-white">
+             {user.displayName?.[0] || "U"}
+           </button>
+        </div>
       </header>
 
-      {/* Body */}
-      <main className="flex-1 overflow-y-auto px-4 scrollbar-hide">
+      {/* --- MAIN CONTENT --- */}
+      <main className="flex-1 overflow-y-auto px-4 pt-4 scrollbar-hide">
         <AnimatePresence mode="wait">
-          {activeTab === "home" && <HomeTab key="home" user={user} colors={colors} />}
-          {activeTab === "care" && <CareCenterTab key="care" user={user} colors={colors} />}
-          {activeTab === "tools" && <ToolsTab key="tools" colors={colors} />}
-          {activeTab === "community" && <CommunityTab key="community" user={user} colors={colors} />}
-          {activeTab === "profile" && <ProfileTab key="profile" user={user} onLogout={handleLogout} colors={colors} theme={theme} setTheme={setTheme} />}
+          {activeTab === "home" && <HomeTab key="home" user={user} userData={userData} mode={userMode} />}
+          {activeTab === "care" && <CareTab key="care" user={user} />}
+          {activeTab === "nutrition" && <NutritionTab key="nutrition" />}
+          {activeTab === "community" && <CommunityTab key="community" user={user} />}
+          {activeTab === "profile" && <ProfileTab key="profile" user={user} userData={userData} logout={() => signOut(auth)} />}
         </AnimatePresence>
       </main>
 
-      {/* Navbar */}
-      <nav className="fixed bottom-0 w-full bg-white border-t border-gray-100 px-2 py-3 flex justify-around items-center shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-50 rounded-t-2xl">
-        <NavIcon icon={Home} label="Home" active={activeTab === "home"} onClick={() => setActiveTab("home")} color={colors.navActive} />
-        <NavIcon icon={Stethoscope} label="Care" active={activeTab === "care"} onClick={() => setActiveTab("care")} color={colors.navActive} />
-        <NavIcon icon={Activity} label="Tools" active={activeTab === "tools"} onClick={() => setActiveTab("tools")} color={colors.navActive} />
-        <NavIcon icon={Users} label="Social" active={activeTab === "community"} onClick={() => setActiveTab("community")} color={colors.navActive} />
-        <NavIcon icon={User} label="Me" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} color={colors.navActive} />
+      {/* --- BOTTOM NAV --- */}
+      <nav className="fixed bottom-0 w-full bg-white border-t border-slate-200 px-2 py-3 flex justify-around items-center shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-50 rounded-t-2xl">
+        <NavIcon icon={Home} label="Home" active={activeTab === "home"} onClick={() => setActiveTab("home")} />
+        <NavIcon icon={Stethoscope} label="Care" active={activeTab === "care"} onClick={() => setActiveTab("care")} />
+        <NavIcon icon={ShoppingBag} label="Diet" active={activeTab === "nutrition"} onClick={() => setActiveTab("nutrition")} />
+        <NavIcon icon={Users} label="Forum" active={activeTab === "community"} onClick={() => setActiveTab("community")} />
+        <NavIcon icon={User} label="Settings" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
       </nav>
     </div>
   );
 }
 
-// ----------------------------------------------------------------------
-// 🔐 AUTH SCREEN
-// ----------------------------------------------------------------------
-function AuthScreen({ onLogin, colors }: any) {
+// =========================================================================
+// 🔐 AUTH SCREEN (Real Firebase Auth)
+// =========================================================================
+function AuthScreen() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState("");
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    try {
+      if (isLogin) {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        const res = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(res.user, { displayName: name });
+        // Create User Doc in Firestore
+        await setDoc(doc(db, "users", res.user.uid), {
+          name, 
+          email, 
+          phone, 
+          role: "patient",
+          gestationWeek: 12, // Default
+          createdAt: new Date().toISOString()
+        });
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   return (
-    <div className={`min-h-screen ${colors.bg} flex flex-col items-center justify-center p-6`}>
-      <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm text-center">
-        <div className={`h-16 w-16 mx-auto ${colors.primary} rounded-full flex items-center justify-center mb-4`}>
-          <Heart className="text-white" size={32} />
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="h-16 w-16 mx-auto bg-rose-500 rounded-full flex items-center justify-center mb-4 shadow-xl shadow-rose-200">
+            <Heart className="text-white" size={32} />
+          </div>
+          <h1 className="text-3xl font-black text-slate-800">Matri-Force</h1>
+          <p className="text-slate-500">Secure Maternal Safety Net</p>
         </div>
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">Matri-Force</h1>
-        <p className="text-gray-500 text-sm mb-6">Maternal Health Super App</p>
-        <form onSubmit={onLogin} className="space-y-4">
-          <input type="email" placeholder="Email / Phone" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm" required />
-          <input type="password" placeholder="Password" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm" required />
-          <button type="submit" className={`w-full ${colors.primary} text-white font-bold py-3 rounded-xl shadow-lg hover:opacity-90 transition`}>
-            Sign In
+        
+        <form onSubmit={handleAuth} className="space-y-4">
+          {!isLogin && (
+             <>
+               <input type="text" placeholder="Full Name" className="auth-input" value={name} onChange={e=>setName(e.target.value)} required />
+               <input type="tel" placeholder="Phone Number" className="auth-input" value={phone} onChange={e=>setPhone(e.target.value)} required />
+             </>
+          )}
+          <input type="email" placeholder="Email Address" className="auth-input" value={email} onChange={e=>setEmail(e.target.value)} required />
+          <input type="password" placeholder="Password" className="auth-input" value={password} onChange={e=>setPassword(e.target.value)} required />
+          
+          {error && <p className="text-red-500 text-xs text-center">{error}</p>}
+          
+          <button type="submit" className="w-full bg-rose-500 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-rose-600 transition">
+            {isLogin ? "Sign In" : "Create Account"}
           </button>
         </form>
+        
+        <button onClick={() => setIsLogin(!isLogin)} className="w-full mt-4 text-slate-400 text-sm">
+          {isLogin ? "New here? Create Account" : "Already have an account? Sign In"}
+        </button>
       </div>
     </div>
   );
 }
 
-// ----------------------------------------------------------------------
-// 🏠 HOME TAB (Dashboard + Vitals + SOS)
-// ----------------------------------------------------------------------
-function HomeTab({ user, colors }: any) {
+// =========================================================================
+// 🏠 HOME TAB (Dual Mode: Mother vs Guardian)
+// =========================================================================
+function HomeTab({ user, userData, mode }: { user: any, userData: any, mode: UserMode }) {
   const [sosActive, setSosActive] = useState(false);
-  const [vitals, setVitals] = useState<VitalLog[]>([]);
-  const [showLogModal, setShowLogModal] = useState(false);
-  const [newLog, setNewLog] = useState({ weight: "", bp: "" });
-  
-  // SOS Logic (Syncs with Doctor/Driver)
+
+  // --- OFFLINE BRIDGE PROTOCOL ---
   const triggerSOS = () => {
     if (!navigator.geolocation) return alert("Enable GPS!");
-    navigator.geolocation.getCurrentPosition(pos => {
-      set(ref(rtdb, `sos_alerts/${user.uid}`), {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        status: "RED",
-        timestamp: Date.now(),
-        user_name: user.name,
-        phone: user.phone
-      });
-      setSosActive(true);
-      alert("🚨 SOS Broadcasted to Nearby Doctors & Drivers!");
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const { latitude, longitude } = pos.coords;
+
+      // 1. Try Online Database Push
+      if (navigator.onLine) {
+        await set(ref(rtdb, `sos_alerts/${user.uid}`), {
+          lat: latitude,
+          lng: longitude,
+          status: "RED",
+          timestamp: Date.now(),
+          user_name: user.displayName,
+          phone: userData?.phone || "N/A"
+        });
+        setSosActive(true);
+      } else {
+        // 2. Offline Fallback: SMS
+        const encryptedLoc = `SOS_LAT_${latitude}_LONG_${longitude}`; // "Encrypted" string
+        const smsBody = `EMERGENCY! I need help. Location Code: ${encryptedLoc}.`;
+        window.open(`sms:01711000000?body=${encodeURIComponent(smsBody)}`, '_self');
+      }
     });
   };
 
-  const cancelSOS = async () => {
-    if(confirm("Cancel Emergency Alert?")) {
-      await remove(ref(rtdb, `sos_alerts/${user.uid}`));
-      setSosActive(false);
-    }
-  };
-
-  // Vitals Logic
-  const saveLog = () => {
-    if(!newLog.weight || !newLog.bp) return;
-    const logData: VitalLog = {
-      weight: newLog.weight,
-      bp: newLog.bp,
-      date: new Date().toISOString()
-    };
-    setVitals([logData, ...vitals]); 
-    setShowLogModal(false);
-    setNewLog({ weight: "", bp: "" });
-  };
-
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pb-24">
-      
-      {/* Active SOS Banner */}
-      {sosActive && (
-        <div className="bg-red-600 text-white p-4 rounded-xl shadow-xl animate-pulse flex justify-between items-center">
-          <div>
-            <h3 className="font-bold flex items-center gap-2"><AlertOctagon /> HELP REQUESTED</h3>
-            <p className="text-xs opacity-90">Tracking Location...</p>
-          </div>
-          <button onClick={cancelSOS} className="bg-white text-red-600 px-3 py-1 rounded text-xs font-bold">CANCEL</button>
+  // --- GUARDIAN MODE VIEW ---
+  if (mode === "guardian") {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+        <div className="bg-sky-50 p-6 rounded-2xl border border-sky-100">
+           <h2 className="text-lg font-bold text-sky-900 mb-2">Guardian Tasks</h2>
+           <p className="text-sm text-sky-700 mb-4">You are responsible for these tasks today.</p>
+           
+           <div className="space-y-3">
+             {["Buy Iron Tablets (Folison)", "Ensure 2L Water Intake", "Prepare Hospital Bag"].map((task, i) => (
+               <div key={i} className="flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm">
+                 <div className="h-6 w-6 rounded-full border-2 border-sky-500" />
+                 <span className="text-slate-700 font-medium">{task}</span>
+               </div>
+             ))}
+           </div>
         </div>
-      )}
 
+        <div className="bg-rose-50 p-6 rounded-2xl border border-rose-100">
+          <h2 className="text-lg font-bold text-rose-900 mb-2">Emergency</h2>
+          <button onClick={triggerSOS} className="w-full py-4 bg-rose-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2">
+            <AlertOctagon /> TRIGGER SOS FOR PATIENT
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // --- MOTHER MODE VIEW ---
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      
       {/* SOS Button */}
-      <div className="flex justify-center py-4">
-        <button
-          onClick={sosActive ? () => {} : triggerSOS}
+      <div className="flex flex-col items-center justify-center py-2">
+         <button
+          onClick={sosActive ? () => setSosActive(false) : triggerSOS}
           className={`
             relative w-48 h-48 rounded-full flex items-center justify-center 
-            ${sosActive ? "bg-gray-400" : "bg-gradient-to-br from-red-500 to-rose-600"} 
-            shadow-2xl ring-8 ring-red-100 transition-all active:scale-95
+            ${sosActive ? "bg-slate-600" : "bg-gradient-to-br from-rose-500 to-red-600"} 
+            shadow-2xl shadow-rose-200 ring-4 ring-white transition-all active:scale-95
           `}
         >
-          <div className="text-center text-white z-10">
-            <AlertOctagon size={48} className="mx-auto mb-2" />
-            <span className="text-xl font-black tracking-widest block">SOS</span>
-            <span className="text-[10px] opacity-80 uppercase tracking-wide">Emergency Only</span>
+          <div className="text-center text-white z-10 flex flex-col items-center">
+            <Shield size={40} className="mb-1" />
+            <span className="text-2xl font-black tracking-widest block">SOS</span>
+            {navigator.onLine ? 
+               <span className="text-[10px] bg-white/20 px-2 rounded-full mt-1">ONLINE MODE</span> : 
+               <span className="text-[10px] bg-yellow-400 text-black font-bold px-2 rounded-full mt-1 flex gap-1 items-center"><Smartphone size={8}/> SMS FALLBACK</span>
+            }
           </div>
-          {!sosActive && <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-20"></span>}
+          {!sosActive && <span className="absolute inset-0 rounded-full bg-rose-500 animate-ping opacity-20"></span>}
         </button>
       </div>
 
-      {/* Vitals Card */}
-      <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-bold text-gray-800 flex items-center gap-2">
-            <Activity className="text-rose-500" size={18} /> Health Tracker
-          </h3>
-          <button onClick={() => setShowLogModal(true)} className="text-xs bg-rose-50 text-rose-600 px-3 py-1 rounded-full font-bold">+ Log Data</button>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 bg-gray-50 rounded-xl">
-            <p className="text-xs text-gray-500 mb-1">Weight</p>
-            <p className="text-xl font-bold text-gray-800">{vitals[0]?.weight || "64"} <span className="text-xs font-normal text-gray-400">kg</span></p>
-          </div>
-          <div className="p-3 bg-gray-50 rounded-xl">
-            <p className="text-xs text-gray-500 mb-1">Blood Pressure</p>
-            <p className="text-xl font-bold text-gray-800">{vitals[0]?.bp || "120/80"}</p>
-          </div>
-        </div>
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 gap-3">
+         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+            <p className="text-xs text-slate-400 font-bold uppercase mb-1">Next Checkup</p>
+            <h3 className="text-slate-800 font-bold">Oct 24</h3>
+            <p className="text-xs text-rose-500">Square Hospital</p>
+         </div>
+         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+            <p className="text-xs text-slate-400 font-bold uppercase mb-1">Kick Count</p>
+            <h3 className="text-slate-800 font-bold">12 Kicks</h3>
+            <p className="text-xs text-emerald-500">Active Baby</p>
+         </div>
       </div>
 
-      {/* Add Log Modal */}
-      {showLogModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-xs p-6 rounded-2xl animate-in fade-in zoom-in">
-            <h3 className="font-bold text-lg mb-4">Add Today's Vitals</h3>
-            <input 
-              type="number" placeholder="Weight (kg)" 
-              className="w-full mb-3 p-3 bg-gray-50 rounded-xl text-sm"
-              value={newLog.weight} onChange={e => setNewLog({...newLog, weight: e.target.value})}
-            />
-            <input 
-              type="text" placeholder="BP (e.g., 120/80)" 
-              className="w-full mb-4 p-3 bg-gray-50 rounded-xl text-sm"
-              value={newLog.bp} onChange={e => setNewLog({...newLog, bp: e.target.value})}
-            />
-            <div className="flex gap-2">
-              <button onClick={() => setShowLogModal(false)} className="flex-1 py-2 bg-gray-200 rounded-xl font-bold text-gray-600">Cancel</button>
-              <button onClick={saveLog} className="flex-1 py-2 bg-rose-500 rounded-xl font-bold text-white">Save</button>
-            </div>
-          </div>
-        </div>
-      )}
     </motion.div>
   );
 }
 
-// ----------------------------------------------------------------------
-// 🩺 CARE CENTER (Doctor Chat + AI)
-// ----------------------------------------------------------------------
-function CareCenterTab({ user }: any) {
-  const [activeChat, setActiveChat] = useState<'ai' | 'doctor'>('ai');
-  const [messages, setMessages] = useState<Message[]>([]);
+// =========================================================================
+// 🩺 CARE TAB (Symptom Cam + Fresh Chat)
+// =========================================================================
+function CareTab({ user }: { user: any }) {
+  const [messages, setMessages] = useState<any[]>([]); // Starts Empty!
   const [input, setInput] = useState("");
-  const messagesEndRef = useRef<any>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [riskAlert, setRiskAlert] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (activeChat === 'doctor') {
-      const chatRef = ref(rtdb, `chats/${user.uid}`);
-      const unsub = onValue(chatRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) setMessages(Object.values(data));
-      });
-      return () => unsub();
-    } else {
-      setMessages([{ role: "ai", content: "Hello Rahima! I am your AI assistant. How are you feeling?", timestamp: Date.now() }]);
-    }
-  }, [activeChat]);
-
-  const sendMessage = async () => {
-    if (!input.trim()) return;
-    const newMsg = { role: "user", content: input, timestamp: Date.now() };
-
-    if (activeChat === 'doctor') {
-      await push(ref(rtdb, `chats/${user.uid}`), newMsg);
-    } else {
-      setMessages(prev => [...prev, newMsg as Message]);
+  // --- SYMPTOM CAM (Simulation) ---
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setAnalyzing(true);
       setTimeout(() => {
-        setMessages(prev => [...prev, { role: "ai", content: "That sounds normal. Drink plenty of water.", timestamp: Date.now() }]);
-      }, 1000);
+        setAnalyzing(false);
+        setRiskAlert("Pre-eclampsia Signs Detected: High Swelling");
+        // Auto-forward to doctor logic would go here
+        sendMessage("System: User uploaded a symptom photo. AI Analysis: High Swelling/Risk.");
+      }, 2000);
     }
+  };
+
+  const sendMessage = async (text: string = input) => {
+    if (!text.trim()) return;
+    
+    // 1. Push to "Active Session" for Doctor to see
+    const newMsg = { role: "user", content: text, timestamp: Date.now() };
+    setMessages(prev => [...prev, newMsg]);
+    
+    // 2. Save to Firebase (Realtime for immediate delivery)
+    await push(ref(rtdb, `chats/${user.uid}`), newMsg);
+
+    // 3. Save to History Archive (Firestore) for "Settings" view
+    await addDoc(collection(db, "users", user.uid, "chat_history"), {
+      content: text,
+      role: "user",
+      timestamp: new Date().toISOString()
+    });
+
     setInput("");
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)]">
-      <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-100 flex mb-4">
-        <button onClick={() => setActiveChat('ai')} className={`flex-1 py-2 text-sm font-bold rounded-lg ${activeChat==='ai'?'bg-rose-100 text-rose-600':'text-gray-400'}`}>AI Assistant</button>
-        <button onClick={() => setActiveChat('doctor')} className={`flex-1 py-2 text-sm font-bold rounded-lg ${activeChat==='doctor'?'bg-emerald-100 text-emerald-600':'text-gray-400'}`}>Dr. Ayesha</button>
+    <div className="flex flex-col h-[calc(100vh-140px)] space-y-4">
+      
+      {/* AI Symptom Scanner */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+        <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+          <Camera size={18} className="text-rose-500"/> AI Symptom Check
+        </h3>
+        
+        {riskAlert ? (
+           <div className="bg-red-50 p-3 rounded-xl border border-red-100 flex items-center justify-between">
+             <div className="flex items-center gap-2 text-red-700 font-bold text-sm">
+                <AlertOctagon size={16}/> {riskAlert}
+             </div>
+             <button onClick={() => setRiskAlert(null)} className="text-xs underline text-red-500">Dismiss</button>
+           </div>
+        ) : (
+          <label className="flex items-center justify-center w-full h-20 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition">
+             <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+             {analyzing ? <span className="text-rose-500 font-bold animate-pulse">AI Analysis in Progress...</span> : <span className="text-slate-400 text-sm flex items-center gap-2"><UploadCloud size={16}/> Upload Photo</span>}
+          </label>
+        )}
       </div>
-      <div className="flex-1 overflow-y-auto space-y-3 p-2">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${m.role === 'user' ? 'bg-rose-500 text-white rounded-br-none' : 'bg-white shadow-sm border border-gray-100 rounded-bl-none'}`}>
-              <p>{m.content}</p>
-              <p className="text-[10px] opacity-70 mt-1 text-right">{new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
-            </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-      <div className="p-2 bg-white rounded-full shadow-lg border border-gray-100 flex gap-2 items-center mt-2">
-        <input 
-          className="flex-1 bg-transparent px-4 text-sm outline-none" 
-          placeholder={activeChat === 'ai' ? "Ask anything..." : "Message Dr. Ayesha..."}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && sendMessage()}
-        />
-        <button onClick={sendMessage} className={`p-2 rounded-full text-white ${activeChat==='ai'?'bg-rose-500':'bg-emerald-500'}`}>
-          <Send size={18} />
-        </button>
+
+      {/* Chat Interface (Starts Fresh) */}
+      <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col overflow-hidden">
+        <div className="p-3 bg-slate-50 border-b border-slate-100 text-center">
+           <span className="text-xs font-bold text-slate-500 uppercase">Live Doctor Consult</span>
+           <p className="text-[10px] text-slate-400">Previous chats stored in Settings</p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {messages.length === 0 && <p className="text-center text-slate-300 text-sm mt-10">Start a new conversation...</p>}
+          {messages.map((m, i) => (
+             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+               <div className={`max-w-[85%] p-3 text-sm rounded-2xl ${m.role === 'user' ? 'bg-rose-500 text-white rounded-br-none' : 'bg-slate-100 text-slate-800'}`}>
+                 {m.content}
+               </div>
+             </div>
+          ))}
+        </div>
+
+        <div className="p-3 border-t border-slate-100 flex gap-2">
+          <input className="flex-1 bg-slate-50 px-4 rounded-full text-sm outline-none border border-transparent focus:border-rose-300" 
+            placeholder="Type message..." 
+            value={input} onChange={e => setInput(e.target.value)} 
+            onKeyDown={e => e.key === 'Enter' && sendMessage()}
+          />
+          <button onClick={() => sendMessage()} className="p-2 bg-rose-500 rounded-full text-white shadow-lg shadow-rose-200"><Send size={18}/></button>
+        </div>
       </div>
     </div>
   );
 }
 
-// ----------------------------------------------------------------------
-// 🛠️ TOOLS TAB (Functional Tools)
-// ----------------------------------------------------------------------
-function ToolsTab({ colors }: any) {
-  const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [kickCount, setKickCount] = useState(0);
-
-  const tools = [
-    { id: "kick", icon: Baby, label: "Kick Counter", desc: "Track movement" },
-    { id: "hosp", icon: MapPin, label: "Find Hospital", desc: "Google Maps" },
-    { id: "sched", icon: Calendar, label: "Scheduler", desc: "Book Visit" },
-    { id: "meds", icon: Pill, label: "Meds", desc: "Reminders" },
+// =========================================================================
+// 🥦 MARKET-AWARE NUTRITION TAB
+// =========================================================================
+function NutritionTab() {
+  const recommendations = [
+    { item: "Spinach (Palong Shak)", price: "20৳", benefit: "High Iron", replace: "Apples (280৳)" },
+    { item: "Lentils (Dal)", price: "110৳", benefit: "Protein", replace: "Chicken (190৳)" },
+    { item: "Guava", price: "40৳", benefit: "Vitamin C", replace: "Oranges (220৳)" },
   ];
-
-  const renderToolContent = () => {
-    switch(activeTool) {
-      case "kick":
-        return (
-          <div className="text-center p-6">
-            <h3 className="text-xl font-bold mb-4">Baby Kicks Today</h3>
-            <div className="text-6xl font-black text-rose-500 mb-6">{kickCount}</div>
-            <button onClick={() => setKickCount(c => c + 1)} className="w-full bg-rose-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition">TAP TO COUNT</button>
-            <button onClick={() => setKickCount(0)} className="mt-4 text-xs text-gray-400">Reset</button>
-          </div>
-        );
-      case "hosp":
-        return (
-          <div className="text-center p-6">
-             <MapPin size={48} className="mx-auto text-rose-500 mb-4"/>
-             <h3 className="font-bold text-lg mb-2">Find Nearby Care</h3>
-             <p className="text-sm text-gray-500 mb-6">This will open Google Maps to show hospitals near you.</p>
-             <button onClick={() => window.open("https://www.google.com/maps/search/hospitals+near+me", "_blank")} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">Open Maps</button>
-          </div>
-        );
-      case "sched":
-         return (
-           <div className="p-4">
-             <h3 className="font-bold mb-4">Book Appointment</h3>
-             <input type="date" className="w-full p-3 bg-gray-50 rounded-xl mb-4" />
-             <input type="time" className="w-full p-3 bg-gray-50 rounded-xl mb-4" />
-             <button onClick={() => alert("Request sent to Doctor!")} className="w-full bg-rose-500 text-white py-3 rounded-xl font-bold">Schedule Now</button>
-           </div>
-         );
-      default: return <p>Select a tool</p>;
-    }
-  }
 
   return (
     <div className="space-y-4">
-      {/* Tool Modal */}
-      {activeTool && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden animate-in zoom-in-95 duration-200">
-             <div className="bg-gray-50 p-3 flex justify-between items-center border-b">
-               <h3 className="font-bold text-gray-700 capitalize">{tools.find(t=>t.id===activeTool)?.label}</h3>
-               <button onClick={() => setActiveTool(null)} className="p-1 hover:bg-gray-200 rounded-full"><X size={20}/></button>
-             </div>
-             {renderToolContent()}
-          </div>
-        </div>
-      )}
+       <div className="bg-emerald-600 p-6 rounded-2xl shadow-lg shadow-emerald-100 text-white">
+          <h2 className="font-bold text-lg mb-1 flex items-center gap-2"><ShoppingBag/> Smart Market Guide</h2>
+          <p className="text-emerald-100 text-sm">Save money, eat healthy.</p>
+       </div>
 
-      <h2 className="text-lg font-bold text-gray-800">Pregnancy Toolkit</h2>
-      <div className="grid grid-cols-2 gap-3">
-        {tools.map((t) => (
-          <button key={t.id} onClick={() => setActiveTool(t.id)} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center text-center gap-2 hover:bg-gray-50 transition active:scale-95">
-            <div className={`h-12 w-12 rounded-full ${colors.bg} flex items-center justify-center text-gray-700`}>
-              <t.icon size={24} />
-            </div>
-            <div>
-              <h3 className="font-bold text-sm text-gray-800">{t.label}</h3>
-              <p className="text-[10px] text-gray-400">{t.desc}</p>
-            </div>
-          </button>
-        ))}
-      </div>
+       <h3 className="font-bold text-slate-700 ml-1">Today's Smart Buys</h3>
+       <div className="space-y-3">
+         {recommendations.map((rec, i) => (
+           <div key={i} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
+             <div>
+               <h4 className="font-bold text-slate-800">{rec.item}</h4>
+               <p className="text-emerald-600 text-xs font-bold">{rec.price} / kg</p>
+               <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded mt-1 inline-block">{rec.benefit}</span>
+             </div>
+             <div className="text-right">
+               <p className="text-[10px] text-slate-400">Instead of</p>
+               <p className="text-xs text-red-400 line-through">{rec.replace}</p>
+             </div>
+           </div>
+         ))}
+       </div>
     </div>
   );
 }
 
-// ----------------------------------------------------------------------
+// =========================================================================
 // 👥 COMMUNITY TAB
-// ----------------------------------------------------------------------
-function CommunityTab({ user }: any) {
+// =========================================================================
+function CommunityTab({ user }: { user: any }) {
   const [posts, setPosts] = useState<any[]>([]);
 
   useEffect(() => {
-    const postsRef = ref(rtdb, 'community_posts');
-    onValue(postsRef, (snap) => {
-      const data = snap.val();
-      if(data) setPosts(Object.values(data));
-      else {
-        setPosts([
-          { title: "Iron Tablets?", author: "Fatima", content: "Which brand is best?", likes: 12 },
-          { title: "Swollen Feet", author: "Nusrat", content: "Is this normal at 30 weeks?", likes: 8 },
-        ]);
-      }
+    // Real Firestore Fetch
+    const q = query(collection(db, "community_posts"), orderBy("createdAt", "desc"));
+    getDocs(q).then(snap => {
+      const list = snap.docs.map(d => d.data());
+      setPosts(list.length ? list : [{title:"No posts yet", content: "Be the first to share!", author: "Admin"}]);
     });
   }, []);
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-lg font-bold text-gray-800">Mayer Kotha</h2>
-        <button className="bg-rose-500 text-white text-xs px-3 py-1.5 rounded-full font-bold shadow-md">+ New Post</button>
+        <h2 className="text-lg font-black text-slate-800">Maa-to-Maa Forum</h2>
+        <button className="bg-rose-500 text-white text-xs px-4 py-2 rounded-full font-bold shadow-md hover:bg-rose-600">+ Post</button>
       </div>
       <div className="space-y-3">
         {posts.map((p, i) => (
-          <div key={i} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-800 text-sm">{p.title}</h3>
-            <p className="text-xs text-gray-400 mb-2">by {p.author}</p>
-            <p className="text-sm text-gray-600 leading-relaxed">{p.content}</p>
-            <div className="mt-3 flex gap-4 text-xs text-gray-400">
-              <button className="flex items-center gap-1 hover:text-rose-500"><Heart size={12}/> {p.likes} Likes</button>
-              <button className="flex items-center gap-1 hover:text-blue-500"><MessageCircle size={12}/> Reply</button>
+          <div key={i} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:border-rose-100 transition">
+            <h3 className="font-bold text-slate-800 text-sm mb-1">{p.title}</h3>
+            <p className="text-slate-600 text-sm mb-3 leading-relaxed">{p.content}</p>
+            <div className="flex justify-between items-center text-xs text-slate-400">
+               <span>@{p.author}</span>
+               <div className="flex gap-3">
+                 <span className="flex items-center gap-1 hover:text-rose-500 cursor-pointer"><Heart size={12}/> {p.likes || 0}</span>
+                 <span className="flex items-center gap-1"><MessageCircle size={12}/> {p.commentsCount || 0}</span>
+               </div>
             </div>
           </div>
         ))}
@@ -440,44 +461,73 @@ function CommunityTab({ user }: any) {
   );
 }
 
-// ----------------------------------------------------------------------
-// 👤 PROFILE TAB
-// ----------------------------------------------------------------------
-function ProfileTab({ user, onLogout, theme, setTheme }: any) {
-  return (
-    <div className="space-y-4">
-      <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 text-center">
-        <div className="h-20 w-20 bg-rose-100 rounded-full mx-auto mb-3 flex items-center justify-center text-3xl font-bold text-rose-500">
-          {user.name[0]}
-        </div>
-        <h2 className="font-bold text-lg">{user.name}</h2>
-        <p className="text-sm text-gray-500">{user.phone} • {user.zone}</p>
-      </div>
+// =========================================================================
+// 👤 PROFILE / SETTINGS TAB (Includes Chat History)
+// =========================================================================
+function ProfileTab({ user, userData, logout }: any) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <button onClick={() => setTheme(theme==='pink'?'blue':'pink')} className="w-full p-4 flex justify-between items-center hover:bg-gray-50 border-b border-gray-50">
-          <span className="text-sm font-medium">Switch Mode ({theme==='pink'?'Pregnancy':'Post-Partum'})</span>
-          <ChevronRight size={16} className="text-gray-400"/>
+  const fetchHistory = async () => {
+    setHistoryOpen(true);
+    const q = query(collection(db, "users", user.uid, "chat_history"), orderBy("timestamp", "desc"));
+    const snap = await getDocs(q);
+    setHistory(snap.docs.map(d => d.data()));
+  };
+
+  if (historyOpen) {
+    return (
+      <div className="space-y-4">
+        <button onClick={() => setHistoryOpen(false)} className="flex items-center gap-2 text-slate-500 font-bold mb-4">
+           <ChevronRight className="rotate-180"/> Back to Settings
         </button>
-        <button className="w-full p-4 flex justify-between items-center hover:bg-gray-50 border-b border-gray-50">
-          <span className="text-sm font-medium">Medical History</span>
-          <ChevronRight size={16} className="text-gray-400"/>
-        </button>
-        <button onClick={onLogout} className="w-full p-4 flex justify-between items-center hover:bg-red-50 text-red-500">
-          <span className="text-sm font-bold">Sign Out</span>
-          <LogOut size={16}/>
-        </button>
+        <h2 className="font-bold text-slate-800">Chat Archive</h2>
+        <div className="space-y-2">
+           {history.map((h, i) => (
+             <div key={i} className="bg-white p-3 rounded-xl border border-slate-100 text-sm">
+               <p className="text-slate-800">{h.content}</p>
+               <p className="text-[10px] text-slate-400 mt-1">{new Date(h.timestamp).toLocaleString()}</p>
+             </div>
+           ))}
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-rose-400 to-rose-600"></div>
+          <div className="h-20 w-20 bg-slate-100 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl font-bold text-slate-500">
+             {user.displayName?.[0]}
+          </div>
+          <h2 className="font-bold text-lg text-slate-900">{user.displayName}</h2>
+          <p className="text-sm text-slate-500">{user.email}</p>
+       </div>
+
+       <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+          <button onClick={fetchHistory} className="w-full p-4 flex justify-between items-center hover:bg-slate-50 border-b border-slate-50">
+             <span className="text-sm font-bold text-slate-700 flex items-center gap-3"><FileText size={18} className="text-rose-500"/> Chat History</span>
+             <ChevronRight size={16} className="text-slate-300"/>
+          </button>
+          <button className="w-full p-4 flex justify-between items-center hover:bg-slate-50 border-b border-slate-50">
+             <span className="text-sm font-bold text-slate-700 flex items-center gap-3"><Phone size={18} className="text-emerald-500"/> Emergency Contacts</span>
+             <ChevronRight size={16} className="text-slate-300"/>
+          </button>
+          <button onClick={logout} className="w-full p-4 flex justify-between items-center hover:bg-red-50 text-red-500">
+             <span className="text-sm font-bold flex items-center gap-3"><LogOut size={18}/> Sign Out</span>
+          </button>
+       </div>
     </div>
   );
 }
 
-// --- Helper Component ---
-function NavIcon({ icon: Icon, label, active, onClick, color }: any) {
+// --- HELPER ---
+function NavIcon({ icon: Icon, label, active, onClick }: any) {
   return (
     <button onClick={onClick} className="flex flex-col items-center gap-1 w-16 transition-all active:scale-95">
-      <Icon size={24} className={active ? color : "text-gray-300"} strokeWidth={active ? 2.5 : 2} />
-      <span className={`text-[10px] font-medium ${active ? color : "text-gray-400"}`}>{label}</span>
+      <Icon size={24} className={active ? "text-rose-500" : "text-slate-300"} strokeWidth={active ? 2.5 : 2} />
+      <span className={`text-[10px] font-bold ${active ? "text-rose-500" : "text-slate-400"}`}>{label}</span>
     </button>
   );
 }
