@@ -5,402 +5,478 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Home, MessageCircle, Users, User, Mic, Send, Camera, 
   AlertOctagon, Plus, Phone, Droplet, Clock, Calendar, 
-  Stethoscope, Activity, ChevronRight
+  Stethoscope, Activity, ChevronRight, LogOut, Lock, 
+  MapPin, Heart, Baby, Timer, Pill, Utensils, Search,
+  CheckCircle, X, ArrowLeft
 } from "lucide-react";
 
 // Firebase Imports
 import { db, rtdb } from "@/lib/firebase"; 
-import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
-import { ref, set, push, onValue } from "firebase/database";
+import { collection, query, orderBy, onSnapshot, addDoc, getDocs, where } from "firebase/firestore";
+import { ref, set, push, onValue, update, remove } from "firebase/database";
 
 // --- Types ---
 type Theme = "pink" | "blue";
-type Tab = "home" | "care" | "community" | "profile"; // Renamed 'ai' to 'care'
-type Message = { role: "user" | "ai" | "doctor"; content: string; image?: string; timestamp?: number };
+type Tab = "home" | "care" | "tools" | "community" | "profile"; 
+type Message = { id?: string; role: "user" | "ai" | "doctor"; content: string; timestamp: number };
+type VitalLog = { weight: string; bp: string; date: string }; // Fixed Type Definition
 
-// --- Mock User ID for Demo ---
-const USER_ID = "rahima_123"; 
+// --- Mock User Data (Simulated Auth) ---
+const MOCK_USER = {
+  uid: "rahima_123",
+  name: "Rahima Begum",
+  phone: "+8801700000000",
+  zone: "Dhanmondi",
+  gestationWeek: 24
+};
 
 export default function PatientApp() {
+  // --- Global State ---
+  const [user, setUser] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [theme, setTheme] = useState<Theme>("pink");
 
-  // Dynamic Theme Colors
-  const colors = {
-    bg: theme === "pink" ? "bg-gradient-to-br from-pink-50 to-rose-100" : "bg-gradient-to-br from-blue-50 to-sky-100",
-    primary: theme === "pink" ? "bg-rose-500" : "bg-blue-600",
-    primaryText: theme === "pink" ? "text-rose-600" : "text-blue-600",
-    navActive: theme === "pink" ? "text-rose-600" : "text-blue-600",
-    card: "bg-white/80 backdrop-blur-md border border-white/50 shadow-sm",
+  // --- Auth Handlers ---
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setUser(MOCK_USER); // Simulating Login
   };
 
+  const handleLogout = () => {
+    if(confirm("Sign out of Matri-Force?")) setUser(null);
+  };
+
+  // --- Dynamic Styling ---
+  const colors = {
+    bg: theme === "pink" ? "bg-rose-50" : "bg-sky-50",
+    primary: theme === "pink" ? "bg-rose-500" : "bg-sky-600",
+    text: theme === "pink" ? "text-rose-600" : "text-sky-600",
+    navActive: theme === "pink" ? "text-rose-600" : "text-sky-600",
+  };
+
+  if (!user) {
+    return <AuthScreen onLogin={handleLogin} colors={colors} />;
+  }
+
   return (
-    <div className={`min-h-screen ${colors.bg} flex flex-col font-sans transition-colors duration-500`}>
+    <div className={`min-h-screen ${colors.bg} flex flex-col font-sans transition-colors duration-500 pb-20`}>
       
-      {/* Dynamic Header */}
-      <header className="px-6 pt-8 pb-4 flex justify-between items-center">
+      {/* Header */}
+      <header className="px-6 pt-8 pb-4 flex justify-between items-center bg-white/50 backdrop-blur-sm sticky top-0 z-40">
         <div>
-          <p className="text-gray-500 text-sm">
-            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          <p className="text-gray-500 text-xs font-mono uppercase tracking-wider">
+            Week {user.gestationWeek} • {theme === "pink" ? "Pregnancy" : "Post-Partum"}
           </p>
-          <h1 className="text-2xl font-bold text-gray-800">
-            Good Morning, Rahima
-          </h1>
+          <h1 className="text-xl font-bold text-gray-800">Hi, {user.name.split(' ')[0]}</h1>
         </div>
-        <div className={`h-10 w-10 rounded-full ${colors.primary} flex items-center justify-center text-white font-bold shadow-lg`}>
-          R
-        </div>
+        <button onClick={() => setActiveTab("profile")} className={`h-10 w-10 rounded-full ${colors.primary} flex items-center justify-center text-white font-bold shadow-lg ring-2 ring-white`}>
+          {user.name[0]}
+        </button>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto px-4 pb-24 scrollbar-hide">
+      {/* Body */}
+      <main className="flex-1 overflow-y-auto px-4 scrollbar-hide">
         <AnimatePresence mode="wait">
-          {activeTab === "home" && <HomeTab key="home" colors={colors} />}
-          {activeTab === "care" && <CareCenterTab key="care" colors={colors} />}
-          {activeTab === "community" && <CommunityTab key="community" colors={colors} />}
-          {activeTab === "profile" && <ProfileTab key="profile" colors={colors} theme={theme} setTheme={setTheme} />}
+          {activeTab === "home" && <HomeTab key="home" user={user} colors={colors} />}
+          {activeTab === "care" && <CareCenterTab key="care" user={user} colors={colors} />}
+          {activeTab === "tools" && <ToolsTab key="tools" colors={colors} />}
+          {activeTab === "community" && <CommunityTab key="community" user={user} colors={colors} />}
+          {activeTab === "profile" && <ProfileTab key="profile" user={user} onLogout={handleLogout} colors={colors} theme={theme} setTheme={setTheme} />}
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 w-full bg-white border-t border-gray-100 px-6 py-4 flex justify-between items-center shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-50">
+      {/* Navbar */}
+      <nav className="fixed bottom-0 w-full bg-white border-t border-gray-100 px-2 py-3 flex justify-around items-center shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-50 rounded-t-2xl">
         <NavIcon icon={Home} label="Home" active={activeTab === "home"} onClick={() => setActiveTab("home")} color={colors.navActive} />
-        <NavIcon icon={Stethoscope} label="Care Center" active={activeTab === "care"} onClick={() => setActiveTab("care")} color={colors.navActive} />
-        <NavIcon icon={Users} label="Community" active={activeTab === "community"} onClick={() => setActiveTab("community")} color={colors.navActive} />
-        <NavIcon icon={User} label="Profile" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} color={colors.navActive} />
+        <NavIcon icon={Stethoscope} label="Care" active={activeTab === "care"} onClick={() => setActiveTab("care")} color={colors.navActive} />
+        <NavIcon icon={Activity} label="Tools" active={activeTab === "tools"} onClick={() => setActiveTab("tools")} color={colors.navActive} />
+        <NavIcon icon={Users} label="Social" active={activeTab === "community"} onClick={() => setActiveTab("community")} color={colors.navActive} />
+        <NavIcon icon={User} label="Me" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} color={colors.navActive} />
       </nav>
     </div>
   );
 }
 
-// --- TAB 1: HOME (Dashboard + SOS + Wallet + Vitals) ---
-function HomeTab({ colors }: { colors: any }) {
-  const [balance, setBalance] = useState(500);
+// ----------------------------------------------------------------------
+// 🔐 AUTH SCREEN
+// ----------------------------------------------------------------------
+function AuthScreen({ onLogin, colors }: any) {
+  return (
+    <div className={`min-h-screen ${colors.bg} flex flex-col items-center justify-center p-6`}>
+      <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm text-center">
+        <div className={`h-16 w-16 mx-auto ${colors.primary} rounded-full flex items-center justify-center mb-4`}>
+          <Heart className="text-white" size={32} />
+        </div>
+        <h1 className="text-2xl font-bold text-gray-800 mb-2">Matri-Force</h1>
+        <p className="text-gray-500 text-sm mb-6">Maternal Health Super App</p>
+        <form onSubmit={onLogin} className="space-y-4">
+          <input type="email" placeholder="Email / Phone" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm" required />
+          <input type="password" placeholder="Password" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm" required />
+          <button type="submit" className={`w-full ${colors.primary} text-white font-bold py-3 rounded-xl shadow-lg hover:opacity-90 transition`}>
+            Sign In
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
+// 🏠 HOME TAB (Dashboard + Vitals + SOS)
+// ----------------------------------------------------------------------
+function HomeTab({ user, colors }: any) {
   const [sosActive, setSosActive] = useState(false);
-  const sosTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // SOS Logic
-  const startSOS = () => {
-    setSosActive(true);
-    sosTimeoutRef.current = setTimeout(triggerEmergency, 3000); 
-  };
-
-  const cancelSOS = () => {
-    setSosActive(false);
-    if (sosTimeoutRef.current) clearTimeout(sosTimeoutRef.current);
-  };
-
-  const triggerEmergency = () => {
-    if (!navigator.geolocation) return alert("Geolocation not supported");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        set(ref(rtdb, `sos_alerts/${USER_ID}`), {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          status: "RED",
-          timestamp: Date.now(),
-        });
-        alert("🚨 SOS SENT! Doctors notified.");
-        setSosActive(false);
-      },
-      () => alert("Location access denied.")
-    );
-  };
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-      
-      {/* Appointment Card (New Feature) */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-purple-500 flex justify-between items-center">
-        <div>
-          <p className="text-xs text-gray-500 font-bold uppercase tracking-wide">Next Checkup</p>
-          <h3 className="font-bold text-gray-800">Dr. Ayesha Siddiqua</h3>
-          <p className="text-sm text-purple-600 font-medium">Tomorrow, 10:00 AM</p>
-        </div>
-        <div className="h-10 w-10 bg-purple-50 rounded-full flex items-center justify-center text-purple-600">
-          <Calendar size={20} />
-        </div>
-      </div>
-
-      {/* SOS Module */}
-      <div className="flex flex-col items-center justify-center py-2">
-        <button
-          onMouseDown={startSOS}
-          onMouseUp={cancelSOS}
-          onMouseLeave={cancelSOS}
-          onTouchStart={startSOS}
-          onTouchEnd={cancelSOS}
-          className={`
-            relative w-40 h-40 rounded-full flex items-center justify-center 
-            bg-gradient-to-b from-red-500 to-red-600 shadow-xl 
-            transition-transform duration-200 active:scale-95
-          `}
-        >
-          <span className="absolute w-full h-full rounded-full bg-red-500 opacity-20 animate-ping"></span>
-          <span className={`absolute w-full h-full rounded-full border-4 border-white/30 transition-all duration-[3000ms] ${sosActive ? "scale-100" : "scale-100"}`} style={{ clipPath: sosActive ? "circle(100%)" : "circle(0%)" }}></span>
-          
-          <div className="flex flex-col items-center text-white z-10 pointer-events-none">
-            <AlertOctagon size={40} className="mb-1" />
-            <span className="font-bold text-base">SOS</span>
-            <span className="text-[10px] opacity-80">Hold 3s</span>
-          </div>
-        </button>
-      </div>
-
-      {/* Vitals Tracker (New Feature) */}
-      <div className={`p-5 rounded-xl ${colors.card}`}>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-bold text-gray-800 flex items-center gap-2">
-            <Activity size={18} className="text-rose-500" /> Health Log
-          </h3>
-          <button className="text-xs bg-white border px-2 py-1 rounded shadow-sm">+ Add Log</button>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white/60 p-3 rounded-lg text-center">
-            <p className="text-xs text-gray-500">Weight</p>
-            <p className="text-xl font-bold text-gray-800">62 <span className="text-xs font-normal">kg</span></p>
-            <p className="text-[10px] text-emerald-500">+0.5kg this week</p>
-          </div>
-          <div className="bg-white/60 p-3 rounded-lg text-center">
-            <p className="text-xs text-gray-500">Blood Pressure</p>
-            <p className="text-xl font-bold text-gray-800">120/80</p>
-            <p className="text-[10px] text-emerald-500">Normal</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Wallet Preview */}
-      <div className={`p-5 rounded-xl bg-gradient-to-r from-gray-900 to-gray-800 text-white shadow-lg`}>
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-xs text-gray-400">Mayer Bank Balance</p>
-            <h3 className="text-2xl font-bold mt-1">৳ {balance}</h3>
-          </div>
-          <button onClick={() => setBalance(b => b + 100)} className="bg-white/20 p-2 rounded-lg hover:bg-white/30"><Plus size={18} /></button>
-        </div>
-      </div>
-
-    </motion.div>
-  );
-}
-
-// --- TAB 2: CARE CENTER (AI + DOCTOR CHAT) ---
-function CareCenterTab({ colors }: { colors: any }) {
-  const [mode, setMode] = useState<'bot' | 'doctor'>('bot');
-
-  return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="h-[calc(100vh-180px)] flex flex-col">
-      {/* Toggle Header */}
-      <div className="bg-white/50 p-1 rounded-xl flex mb-4 border border-white/50">
-        <button 
-          onClick={() => setMode('bot')}
-          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${mode === 'bot' ? 'bg-white shadow-sm text-rose-600' : 'text-gray-500'}`}
-        >
-          Ask AI Assistant
-        </button>
-        <button 
-          onClick={() => setMode('doctor')}
-          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${mode === 'doctor' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500'}`}
-        >
-          Chat with Doctor
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-hidden relative rounded-2xl bg-white/40 border border-white/50 shadow-inner">
-         {mode === 'bot' ? <AIChatModule colors={colors} /> : <DoctorChatModule />}
-      </div>
-    </motion.div>
-  );
-}
-
-// --- Sub-Module: AI Chat (Existing) ---
-function AIChatModule({ colors }: { colors: any }) {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "ai", content: "Hello! I am your AI assistant. How can I help you today?" }
-  ]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [vitals, setVitals] = useState<VitalLog[]>([]);
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [newLog, setNewLog] = useState({ weight: "", bp: "" });
   
-  const handleSend = async () => {
-    if (!input.trim()) return;
-    const userMsg: Message = { role: "user", content: input };
-    setMessages(prev => [...prev, userMsg]);
-    setInput("");
-    setIsLoading(true);
-
-    try {
-      // Local AI / OpenAI connection
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        body: JSON.stringify({ message: userMsg.content })
+  // SOS Logic (Syncs with Doctor/Driver)
+  const triggerSOS = () => {
+    if (!navigator.geolocation) return alert("Enable GPS!");
+    navigator.geolocation.getCurrentPosition(pos => {
+      set(ref(rtdb, `sos_alerts/${user.uid}`), {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        status: "RED",
+        timestamp: Date.now(),
+        user_name: user.name,
+        phone: user.phone
       });
-      const data = await res.json();
-      setMessages(prev => [...prev, { role: "ai", content: data.message }]);
-    } catch (e) {
-      setMessages(prev => [...prev, { role: "ai", content: "Connection error. Please try again." }]);
-    } finally {
-      setIsLoading(false);
+      setSosActive(true);
+      alert("🚨 SOS Broadcasted to Nearby Doctors & Drivers!");
+    });
+  };
+
+  const cancelSOS = async () => {
+    if(confirm("Cancel Emergency Alert?")) {
+      await remove(ref(rtdb, `sos_alerts/${user.uid}`));
+      setSosActive(false);
     }
   };
 
+  // Vitals Logic
+  const saveLog = () => {
+    if(!newLog.weight || !newLog.bp) return;
+    const logData: VitalLog = {
+      weight: newLog.weight,
+      bp: newLog.bp,
+      date: new Date().toISOString()
+    };
+    setVitals([logData, ...vitals]); 
+    setShowLogModal(false);
+    setNewLog({ weight: "", bp: "" });
+  };
+
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm ${
-              m.role === "user" ? "bg-rose-500 text-white rounded-br-none" : "bg-white text-gray-800 rounded-bl-none"
-            }`}>
-              {m.content}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pb-24">
+      
+      {/* Active SOS Banner */}
+      {sosActive && (
+        <div className="bg-red-600 text-white p-4 rounded-xl shadow-xl animate-pulse flex justify-between items-center">
+          <div>
+            <h3 className="font-bold flex items-center gap-2"><AlertOctagon /> HELP REQUESTED</h3>
+            <p className="text-xs opacity-90">Tracking Location...</p>
+          </div>
+          <button onClick={cancelSOS} className="bg-white text-red-600 px-3 py-1 rounded text-xs font-bold">CANCEL</button>
+        </div>
+      )}
+
+      {/* SOS Button */}
+      <div className="flex justify-center py-4">
+        <button
+          onClick={sosActive ? () => {} : triggerSOS}
+          className={`
+            relative w-48 h-48 rounded-full flex items-center justify-center 
+            ${sosActive ? "bg-gray-400" : "bg-gradient-to-br from-red-500 to-rose-600"} 
+            shadow-2xl ring-8 ring-red-100 transition-all active:scale-95
+          `}
+        >
+          <div className="text-center text-white z-10">
+            <AlertOctagon size={48} className="mx-auto mb-2" />
+            <span className="text-xl font-black tracking-widest block">SOS</span>
+            <span className="text-[10px] opacity-80 uppercase tracking-wide">Emergency Only</span>
+          </div>
+          {!sosActive && <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-20"></span>}
+        </button>
+      </div>
+
+      {/* Vitals Card */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-bold text-gray-800 flex items-center gap-2">
+            <Activity className="text-rose-500" size={18} /> Health Tracker
+          </h3>
+          <button onClick={() => setShowLogModal(true)} className="text-xs bg-rose-50 text-rose-600 px-3 py-1 rounded-full font-bold">+ Log Data</button>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 bg-gray-50 rounded-xl">
+            <p className="text-xs text-gray-500 mb-1">Weight</p>
+            <p className="text-xl font-bold text-gray-800">{vitals[0]?.weight || "64"} <span className="text-xs font-normal text-gray-400">kg</span></p>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-xl">
+            <p className="text-xs text-gray-500 mb-1">Blood Pressure</p>
+            <p className="text-xl font-bold text-gray-800">{vitals[0]?.bp || "120/80"}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Log Modal */}
+      {showLogModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xs p-6 rounded-2xl animate-in fade-in zoom-in">
+            <h3 className="font-bold text-lg mb-4">Add Today's Vitals</h3>
+            <input 
+              type="number" placeholder="Weight (kg)" 
+              className="w-full mb-3 p-3 bg-gray-50 rounded-xl text-sm"
+              value={newLog.weight} onChange={e => setNewLog({...newLog, weight: e.target.value})}
+            />
+            <input 
+              type="text" placeholder="BP (e.g., 120/80)" 
+              className="w-full mb-4 p-3 bg-gray-50 rounded-xl text-sm"
+              value={newLog.bp} onChange={e => setNewLog({...newLog, bp: e.target.value})}
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setShowLogModal(false)} className="flex-1 py-2 bg-gray-200 rounded-xl font-bold text-gray-600">Cancel</button>
+              <button onClick={saveLog} className="flex-1 py-2 bg-rose-500 rounded-xl font-bold text-white">Save</button>
             </div>
           </div>
-        ))}
-        {isLoading && <p className="text-xs text-gray-500 p-4">AI is thinking...</p>}
-      </div>
-      <div className="p-3 bg-white border-t flex gap-2">
-        <input 
-          className="flex-1 bg-gray-100 rounded-full px-4 text-sm outline-none" 
-          placeholder="Ask about symptoms..."
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSend()}
-        />
-        <button onClick={handleSend} className="p-2 bg-rose-500 rounded-full text-white"><Send size={18} /></button>
-      </div>
-    </div>
+        </div>
+      )}
+    </motion.div>
   );
 }
 
-// --- Sub-Module: Doctor Chat (New & Connected) ---
-function DoctorChatModule() {
+// ----------------------------------------------------------------------
+// 🩺 CARE CENTER (Doctor Chat + AI)
+// ----------------------------------------------------------------------
+function CareCenterTab({ user }: any) {
+  const [activeChat, setActiveChat] = useState<'ai' | 'doctor'>('ai');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const messagesEndRef = useRef<any>(null);
 
   useEffect(() => {
-    // Realtime Listener for Doctor Messages
-    const chatRef = ref(rtdb, `chats/${USER_ID}`);
-    const unsubscribe = onValue(chatRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const list = Object.values(data) as Message[];
-        // Simple sort by timestamp if available, else standard order
-        setMessages(list);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+    if (activeChat === 'doctor') {
+      const chatRef = ref(rtdb, `chats/${user.uid}`);
+      const unsub = onValue(chatRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) setMessages(Object.values(data));
+      });
+      return () => unsub();
+    } else {
+      setMessages([{ role: "ai", content: "Hello Rahima! I am your AI assistant. How are you feeling?", timestamp: Date.now() }]);
+    }
+  }, [activeChat]);
 
-  const sendToDoctor = async () => {
+  const sendMessage = async () => {
     if (!input.trim()) return;
-    const msg: Message = { role: "user", content: input, timestamp: Date.now() };
-    
-    // Optimistic UI Update
-    // setMessages(prev => [...prev, msg]); // Optional, the listener handles it fast enough usually
-    
-    // Send to Firebase Realtime DB
-    await push(ref(rtdb, `chats/${USER_ID}`), msg);
+    const newMsg = { role: "user", content: input, timestamp: Date.now() };
+
+    if (activeChat === 'doctor') {
+      await push(ref(rtdb, `chats/${user.uid}`), newMsg);
+    } else {
+      setMessages(prev => [...prev, newMsg as Message]);
+      setTimeout(() => {
+        setMessages(prev => [...prev, { role: "ai", content: "That sounds normal. Drink plenty of water.", timestamp: Date.now() }]);
+      }, 1000);
+    }
     setInput("");
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50">
-      <div className="p-3 bg-emerald-600 text-white flex items-center gap-3 shadow-md z-10">
-        <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-          <Stethoscope size={16} />
-        </div>
-        <div>
-          <h3 className="text-sm font-bold">Dr. Ayesha (Online)</h3>
-          <p className="text-[10px] opacity-80">Usually replies in 5 mins</p>
-        </div>
+    <div className="flex flex-col h-[calc(100vh-140px)]">
+      <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-100 flex mb-4">
+        <button onClick={() => setActiveChat('ai')} className={`flex-1 py-2 text-sm font-bold rounded-lg ${activeChat==='ai'?'bg-rose-100 text-rose-600':'text-gray-400'}`}>AI Assistant</button>
+        <button onClick={() => setActiveChat('doctor')} className={`flex-1 py-2 text-sm font-bold rounded-lg ${activeChat==='doctor'?'bg-emerald-100 text-emerald-600':'text-gray-400'}`}>Dr. Ayesha</button>
       </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 && (
-          <div className="text-center mt-10 opacity-50 text-sm">
-            <p>Start a consultation...</p>
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto space-y-3 p-2">
         {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm ${
-              m.role === "user" 
-                ? "bg-emerald-600 text-white rounded-br-none" 
-                : "bg-white text-gray-800 rounded-bl-none border border-gray-200"
-            }`}>
-              {m.role === 'doctor' && <span className="block text-[10px] font-bold text-emerald-600 mb-1">Dr. Ayesha</span>}
-              {m.content}
+          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${m.role === 'user' ? 'bg-rose-500 text-white rounded-br-none' : 'bg-white shadow-sm border border-gray-100 rounded-bl-none'}`}>
+              <p>{m.content}</p>
+              <p className="text-[10px] opacity-70 mt-1 text-right">{new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
             </div>
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
-
-      <div className="p-3 bg-white border-t flex gap-2">
+      <div className="p-2 bg-white rounded-full shadow-lg border border-gray-100 flex gap-2 items-center mt-2">
         <input 
-          className="flex-1 bg-gray-100 rounded-full px-4 text-sm outline-none" 
-          placeholder="Message doctor..."
+          className="flex-1 bg-transparent px-4 text-sm outline-none" 
+          placeholder={activeChat === 'ai' ? "Ask anything..." : "Message Dr. Ayesha..."}
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && sendToDoctor()}
+          onKeyDown={e => e.key === 'Enter' && sendMessage()}
         />
-        <button onClick={sendToDoctor} className="p-2 bg-emerald-600 rounded-full text-white"><Send size={18} /></button>
+        <button onClick={sendMessage} className={`p-2 rounded-full text-white ${activeChat==='ai'?'bg-rose-500':'bg-emerald-500'}`}>
+          <Send size={18} />
+        </button>
       </div>
     </div>
   );
 }
 
-// --- TAB 3: COMMUNITY ---
-function CommunityTab({ colors }: { colors: any }) {
-  // Static content for display
-  const posts = [
-    { title: "Best Iron Tablets?", author: "Fatima", content: "Doctor suggested Folison, is it good?", likes: 12 },
-    { title: "Warning Signs", author: "Dr. Ayesha", content: "If feet swell suddenly, please visit clinic.", likes: 45 },
+// ----------------------------------------------------------------------
+// 🛠️ TOOLS TAB (Functional Tools)
+// ----------------------------------------------------------------------
+function ToolsTab({ colors }: any) {
+  const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [kickCount, setKickCount] = useState(0);
+
+  const tools = [
+    { id: "kick", icon: Baby, label: "Kick Counter", desc: "Track movement" },
+    { id: "hosp", icon: MapPin, label: "Find Hospital", desc: "Google Maps" },
+    { id: "sched", icon: Calendar, label: "Scheduler", desc: "Book Visit" },
+    { id: "meds", icon: Pill, label: "Meds", desc: "Reminders" },
   ];
 
+  const renderToolContent = () => {
+    switch(activeTool) {
+      case "kick":
+        return (
+          <div className="text-center p-6">
+            <h3 className="text-xl font-bold mb-4">Baby Kicks Today</h3>
+            <div className="text-6xl font-black text-rose-500 mb-6">{kickCount}</div>
+            <button onClick={() => setKickCount(c => c + 1)} className="w-full bg-rose-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition">TAP TO COUNT</button>
+            <button onClick={() => setKickCount(0)} className="mt-4 text-xs text-gray-400">Reset</button>
+          </div>
+        );
+      case "hosp":
+        return (
+          <div className="text-center p-6">
+             <MapPin size={48} className="mx-auto text-rose-500 mb-4"/>
+             <h3 className="font-bold text-lg mb-2">Find Nearby Care</h3>
+             <p className="text-sm text-gray-500 mb-6">This will open Google Maps to show hospitals near you.</p>
+             <button onClick={() => window.open("https://www.google.com/maps/search/hospitals+near+me", "_blank")} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">Open Maps</button>
+          </div>
+        );
+      case "sched":
+         return (
+           <div className="p-4">
+             <h3 className="font-bold mb-4">Book Appointment</h3>
+             <input type="date" className="w-full p-3 bg-gray-50 rounded-xl mb-4" />
+             <input type="time" className="w-full p-3 bg-gray-50 rounded-xl mb-4" />
+             <button onClick={() => alert("Request sent to Doctor!")} className="w-full bg-rose-500 text-white py-3 rounded-xl font-bold">Schedule Now</button>
+           </div>
+         );
+      default: return <p>Select a tool</p>;
+    }
+  }
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-      <div className="flex justify-between items-center mb-2">
+    <div className="space-y-4">
+      {/* Tool Modal */}
+      {activeTool && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden animate-in zoom-in-95 duration-200">
+             <div className="bg-gray-50 p-3 flex justify-between items-center border-b">
+               <h3 className="font-bold text-gray-700 capitalize">{tools.find(t=>t.id===activeTool)?.label}</h3>
+               <button onClick={() => setActiveTool(null)} className="p-1 hover:bg-gray-200 rounded-full"><X size={20}/></button>
+             </div>
+             {renderToolContent()}
+          </div>
+        </div>
+      )}
+
+      <h2 className="text-lg font-bold text-gray-800">Pregnancy Toolkit</h2>
+      <div className="grid grid-cols-2 gap-3">
+        {tools.map((t) => (
+          <button key={t.id} onClick={() => setActiveTool(t.id)} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center text-center gap-2 hover:bg-gray-50 transition active:scale-95">
+            <div className={`h-12 w-12 rounded-full ${colors.bg} flex items-center justify-center text-gray-700`}>
+              <t.icon size={24} />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm text-gray-800">{t.label}</h3>
+              <p className="text-[10px] text-gray-400">{t.desc}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
+// 👥 COMMUNITY TAB
+// ----------------------------------------------------------------------
+function CommunityTab({ user }: any) {
+  const [posts, setPosts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const postsRef = ref(rtdb, 'community_posts');
+    onValue(postsRef, (snap) => {
+      const data = snap.val();
+      if(data) setPosts(Object.values(data));
+      else {
+        setPosts([
+          { title: "Iron Tablets?", author: "Fatima", content: "Which brand is best?", likes: 12 },
+          { title: "Swollen Feet", author: "Nusrat", content: "Is this normal at 30 weeks?", likes: 8 },
+        ]);
+      }
+    });
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
         <h2 className="text-lg font-bold text-gray-800">Mayer Kotha</h2>
-        <button className="text-xs bg-white border px-3 py-1 rounded-full text-gray-600">Top Posts</button>
+        <button className="bg-rose-500 text-white text-xs px-3 py-1.5 rounded-full font-bold shadow-md">+ New Post</button>
       </div>
       <div className="space-y-3">
-        {posts.map((post, i) => (
-          <div key={i} className={`p-4 rounded-xl ${colors.card}`}>
-            <h3 className="font-bold text-gray-800 text-sm">{post.title}</h3>
-            <p className="text-xs text-gray-500 mb-2">by {post.author}</p>
-            <p className="text-sm text-gray-600">{post.content}</p>
+        {posts.map((p, i) => (
+          <div key={i} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-800 text-sm">{p.title}</h3>
+            <p className="text-xs text-gray-400 mb-2">by {p.author}</p>
+            <p className="text-sm text-gray-600 leading-relaxed">{p.content}</p>
+            <div className="mt-3 flex gap-4 text-xs text-gray-400">
+              <button className="flex items-center gap-1 hover:text-rose-500"><Heart size={12}/> {p.likes} Likes</button>
+              <button className="flex items-center gap-1 hover:text-blue-500"><MessageCircle size={12}/> Reply</button>
+            </div>
           </div>
         ))}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// --- TAB 4: PROFILE ---
-function ProfileTab({ colors, theme, setTheme }: { colors: any, theme: Theme, setTheme: any }) {
-  const toggleTheme = () => setTheme(theme === "pink" ? "blue" : "pink");
-
+// ----------------------------------------------------------------------
+// 👤 PROFILE TAB
+// ----------------------------------------------------------------------
+function ProfileTab({ user, onLogout, theme, setTheme }: any) {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <div className={`p-4 rounded-xl ${colors.card} flex items-center justify-between`}>
-        <div>
-          <h3 className="font-bold text-gray-800">App Mode</h3>
-          <p className="text-xs text-gray-500">{theme === "pink" ? "Pregnancy Care" : "Child Care"}</p>
+    <div className="space-y-4">
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 text-center">
+        <div className="h-20 w-20 bg-rose-100 rounded-full mx-auto mb-3 flex items-center justify-center text-3xl font-bold text-rose-500">
+          {user.name[0]}
         </div>
-        <button onClick={toggleTheme} className={`px-4 py-2 rounded-lg text-sm font-bold text-white ${theme === "pink" ? "bg-rose-400" : "bg-blue-500"}`}>
-          {theme === "pink" ? "Switch to Baby" : "Switch to Mom"}
+        <h2 className="font-bold text-lg">{user.name}</h2>
+        <p className="text-sm text-gray-500">{user.phone} • {user.zone}</p>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <button onClick={() => setTheme(theme==='pink'?'blue':'pink')} className="w-full p-4 flex justify-between items-center hover:bg-gray-50 border-b border-gray-50">
+          <span className="text-sm font-medium">Switch Mode ({theme==='pink'?'Pregnancy':'Post-Partum'})</span>
+          <ChevronRight size={16} className="text-gray-400"/>
+        </button>
+        <button className="w-full p-4 flex justify-between items-center hover:bg-gray-50 border-b border-gray-50">
+          <span className="text-sm font-medium">Medical History</span>
+          <ChevronRight size={16} className="text-gray-400"/>
+        </button>
+        <button onClick={onLogout} className="w-full p-4 flex justify-between items-center hover:bg-red-50 text-red-500">
+          <span className="text-sm font-bold">Sign Out</span>
+          <LogOut size={16}/>
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// --- HELPER COMPONENTS ---
+// --- Helper Component ---
 function NavIcon({ icon: Icon, label, active, onClick, color }: any) {
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1 w-14 transition-all">
-      <Icon size={24} className={active ? color : "text-gray-400"} />
+    <button onClick={onClick} className="flex flex-col items-center gap-1 w-16 transition-all active:scale-95">
+      <Icon size={24} className={active ? color : "text-gray-300"} strokeWidth={active ? 2.5 : 2} />
       <span className={`text-[10px] font-medium ${active ? color : "text-gray-400"}`}>{label}</span>
     </button>
   );
