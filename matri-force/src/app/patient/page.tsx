@@ -6,8 +6,9 @@ import {
   Home, MessageCircle, Users, User, Send, Camera, 
   AlertOctagon, ShoppingBag, Stethoscope, 
   ChevronRight, LogOut, Heart, Smartphone,
-  Shield, FileText, Phone, UploadCloud
+  Shield, FileText, Phone, UploadCloud, ArrowLeft
 } from "lucide-react";
+import Link from "next/link"; // For back navigation
 
 // Firebase Imports
 import { db, rtdb, auth } from "@/lib/firebase"; 
@@ -27,10 +28,8 @@ import { ref, set, push } from "firebase/database";
 // --- Types ---
 type Tab = "home" | "care" | "nutrition" | "community" | "profile";
 type UserMode = "mother" | "guardian";
-type AppState = "welcome" | "auth" | "app"; // New state for flow control
 
 export default function PatientApp() {
-  const [appState, setAppState] = useState<AppState>("welcome");
   const [user, setUser] = useState<any>(null);
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -45,186 +44,25 @@ export default function PatientApp() {
         const docRef = doc(db, "users", currentUser.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) setUserData(docSnap.data());
-        setAppState("app"); // Auto-redirect to app if logged in
       } else {
         setUser(null);
         setUserData(null);
-        // If not logged in, we stay on 'welcome' or 'auth' depending on user action
-        if (appState === "app") setAppState("welcome");
       }
       setLoading(false);
     });
     return () => unsub();
-  }, [appState]);
+  }, []);
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-white text-rose-500 font-bold">Loading Matri-Force...</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center bg-white text-rose-500 font-bold">Loading...</div>;
 
+  // 🚨 IF NOT LOGGED IN -> SHOW AUTH SCREEN
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  // ✅ IF LOGGED IN -> SHOW DASHBOARD
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      <AnimatePresence mode="wait">
-        
-        {/* VIEW 1: WELCOME SCREEN */}
-        {appState === "welcome" && (
-          <WelcomeScreen onStart={() => setAppState("auth")} key="welcome" />
-        )}
-
-        {/* VIEW 2: AUTH SCREEN (Sign In/Up) */}
-        {appState === "auth" && (
-          <AuthScreen 
-            onBack={() => setAppState("welcome")} 
-            key="auth" 
-          />
-        )}
-
-        {/* VIEW 3: MAIN APP DASHBOARD */}
-        {appState === "app" && user && (
-          <MainApp 
-            user={user} 
-            userData={userData} 
-            activeTab={activeTab} 
-            setActiveTab={setActiveTab} 
-            userMode={userMode} 
-            setUserMode={setUserMode}
-          />
-        )}
-
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// =========================================================================
-// 👋 WELCOME SCREEN (New Landing Page)
-// =========================================================================
-function WelcomeScreen({ onStart }: { onStart: () => void }) {
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-rose-50 to-white relative overflow-hidden"
-    >
-      {/* Decoration Circles */}
-      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-rose-200 rounded-full blur-3xl opacity-30"></div>
-      <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-blue-200 rounded-full blur-3xl opacity-30"></div>
-
-      <div className="w-full max-w-sm text-center z-10">
-        <div className="h-24 w-24 mx-auto bg-white rounded-full flex items-center justify-center mb-6 shadow-xl shadow-rose-100 ring-4 ring-rose-50">
-          <Heart className="text-rose-500 fill-rose-500" size={48} />
-        </div>
-        
-        <h1 className="text-4xl font-black text-slate-800 mb-2 tracking-tight">Matri-Force</h1>
-        <p className="text-slate-500 text-lg mb-12">Safe Motherhood, Smart Care.</p>
-
-        <button 
-          onClick={onStart}
-          className="w-full bg-rose-500 text-white font-bold text-lg py-5 rounded-2xl shadow-lg shadow-rose-200 hover:bg-rose-600 hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
-        >
-          <span>I am a Mother</span>
-          <ChevronRight size={20} className="opacity-80"/>
-        </button>
-
-        <p className="mt-6 text-xs text-slate-400">
-          Powered by AI & Community Support
-        </p>
-      </div>
-    </motion.div>
-  );
-}
-
-// =========================================================================
-// 🔐 AUTH SCREEN (Fixed UI Colors)
-// =========================================================================
-function AuthScreen({ onBack }: { onBack: () => void }) {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [error, setError] = useState("");
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        const res = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(res.user, { displayName: name });
-        await setDoc(doc(db, "users", res.user.uid), {
-          name, email, phone, role: "patient", gestationWeek: 12, createdAt: new Date().toISOString()
-        });
-      }
-      // AppState handles redirection in parent
-    } catch (err: any) {
-      setError("Error: " + err.message.replace("Firebase: ", ""));
-    }
-  };
-
-  return (
-    <motion.div 
-      initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -50, opacity: 0 }}
-      className="min-h-screen bg-white flex flex-col p-6"
-    >
-      <button onClick={onBack} className="self-start p-2 -ml-2 text-slate-400 hover:text-slate-600 mb-4">
-        Back
-      </button>
-
-      <div className="flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
-        <h2 className="text-3xl font-black text-slate-800 mb-2">
-          {isLogin ? "Welcome Back" : "Create Account"}
-        </h2>
-        <p className="text-slate-500 mb-8">
-          {isLogin ? "Sign in to monitor your health" : "Join Matri-Force today"}
-        </p>
-        
-        <form onSubmit={handleAuth} className="space-y-4">
-          {!isLogin && (
-             <>
-               {/* FIXED: Dark Text on Light Background */}
-               <input type="text" placeholder="Full Name" 
-                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors"
-                 value={name} onChange={e=>setName(e.target.value)} required 
-               />
-               <input type="tel" placeholder="Phone Number" 
-                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors"
-                 value={phone} onChange={e=>setPhone(e.target.value)} required 
-               />
-             </>
-          )}
-          
-          <input type="email" placeholder="Email Address" 
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors"
-            value={email} onChange={e=>setEmail(e.target.value)} required 
-          />
-          
-          <input type="password" placeholder="Password" 
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors"
-            value={password} onChange={e=>setPassword(e.target.value)} required 
-          />
-          
-          {error && <p className="text-rose-500 text-sm bg-rose-50 p-3 rounded-lg border border-rose-100">{error}</p>}
-          
-          <button type="submit" className="w-full bg-rose-500 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-rose-600 transition-all mt-4">
-            {isLogin ? "Sign In" : "Sign Up"}
-          </button>
-        </form>
-        
-        <div className="mt-6 text-center">
-          <button onClick={() => setIsLogin(!isLogin)} className="text-slate-500 text-sm hover:text-rose-500 font-medium">
-            {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-// =========================================================================
-// 📱 MAIN APP COMPONENT (Dashboard)
-// =========================================================================
-function MainApp({ user, userData, activeTab, setActiveTab, userMode, setUserMode }: any) {
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen pb-20">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col pb-20">
       
       {/* HEADER */}
       <header className="px-5 pt-8 pb-4 bg-white shadow-sm flex justify-between items-center sticky top-0 z-40">
@@ -238,10 +76,10 @@ function MainApp({ user, userData, activeTab, setActiveTab, userMode, setUserMod
         </div>
         <div className="flex gap-2">
            <button 
-             onClick={() => setUserMode((prev:any) => prev === 'mother' ? 'guardian' : 'mother')}
+             onClick={() => setUserMode((prev) => prev === 'mother' ? 'guardian' : 'mother')}
              className={`px-3 py-1 rounded-full text-xs font-bold border ${userMode === 'guardian' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600'}`}
            >
-             {userMode === 'mother' ? 'Guardian Mode' : 'Exit Mode'}
+             {userMode === 'mother' ? 'Guardian' : 'Exit'}
            </button>
            <button onClick={() => setActiveTab("profile")} className="h-10 w-10 rounded-full bg-rose-500 flex items-center justify-center text-white font-bold shadow-lg ring-2 ring-white">
              {user.displayName?.[0] || "U"}
@@ -268,13 +106,102 @@ function MainApp({ user, userData, activeTab, setActiveTab, userMode, setUserMod
         <NavIcon icon={Users} label="Forum" active={activeTab === "community"} onClick={() => setActiveTab("community")} />
         <NavIcon icon={User} label="Settings" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
       </nav>
-    </motion.div>
+    </div>
   );
 }
 
 // =========================================================================
-// 🏠 HOME TAB
+// 🔐 AUTH SCREEN (Fixed: Visible Input Boxes)
 // =========================================================================
+function AuthScreen() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState("");
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    try {
+      if (isLogin) {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        const res = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(res.user, { displayName: name });
+        await setDoc(doc(db, "users", res.user.uid), {
+          name, email, phone, role: "patient", gestationWeek: 12, createdAt: new Date().toISOString()
+        });
+      }
+    } catch (err: any) {
+      setError("Error: " + err.message.replace("Firebase: ", ""));
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-white flex flex-col p-6 animate-in fade-in">
+      <Link href="/" className="self-start p-2 -ml-2 text-slate-400 hover:text-slate-600 mb-4 flex items-center gap-1">
+        <ArrowLeft size={16}/> Back
+      </Link>
+
+      <div className="flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
+        <div className="h-16 w-16 bg-rose-500 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-rose-200">
+           <Heart className="text-white" size={32} />
+        </div>
+        <h2 className="text-3xl font-black text-slate-800 mb-2">
+          {isLogin ? "Welcome Back" : "Join Matri-Force"}
+        </h2>
+        <p className="text-slate-500 mb-8">
+          {isLogin ? "Sign in to monitor your health" : "Create your account today"}
+        </p>
+        
+        <form onSubmit={handleAuth} className="space-y-4">
+          {!isLogin && (
+             <>
+               <input type="text" placeholder="Full Name" 
+                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition-all"
+                 value={name} onChange={e=>setName(e.target.value)} required 
+               />
+               <input type="tel" placeholder="Phone Number" 
+                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition-all"
+                 value={phone} onChange={e=>setPhone(e.target.value)} required 
+               />
+             </>
+          )}
+          
+          <input type="email" placeholder="Email Address" 
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition-all"
+            value={email} onChange={e=>setEmail(e.target.value)} required 
+          />
+          
+          <input type="password" placeholder="Password" 
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition-all"
+            value={password} onChange={e=>setPassword(e.target.value)} required 
+          />
+          
+          {error && <p className="text-rose-500 text-sm bg-rose-50 p-3 rounded-lg border border-rose-100 font-medium">{error}</p>}
+          
+          <button type="submit" className="w-full bg-rose-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-rose-200 hover:bg-rose-600 transition-all mt-4">
+            {isLogin ? "Sign In" : "Create Account"}
+          </button>
+        </form>
+        
+        <div className="mt-6 text-center">
+          <button onClick={() => setIsLogin(!isLogin)} className="text-slate-500 text-sm hover:text-rose-500 font-medium">
+            {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ... (Rest of the PatientApp components: HomeTab, CareTab, NutritionTab, CommunityTab, ProfileTab, NavIcon)
+// KEEP THE PREVIOUSLY PROVIDED SUB-COMPONENTS BELOW THIS LINE
+// Just paste the 'HomeTab', 'CareTab', etc. from the previous turn here.
+// I will provide them again below for completeness to ensure no errors.
+
 function HomeTab({ user, userData, mode }: { user: any, userData: any, mode: UserMode }) {
   const [sosActive, setSosActive] = useState(false);
 
@@ -297,7 +224,7 @@ function HomeTab({ user, userData, mode }: { user: any, userData: any, mode: Use
 
   if (mode === "guardian") {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+      <div className="space-y-4 animate-in slide-in-from-bottom-5">
         <div className="bg-sky-50 p-6 rounded-2xl border border-sky-100">
            <h2 className="text-lg font-bold text-sky-900 mb-2">Guardian Tasks</h2>
            <p className="text-sm text-sky-700 mb-4">Daily responsibilities.</p>
@@ -316,12 +243,12 @@ function HomeTab({ user, userData, mode }: { user: any, userData: any, mode: Use
             <AlertOctagon /> TRIGGER SOS FOR PATIENT
           </button>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <div className="space-y-6 animate-in slide-in-from-bottom-5">
       <div className="flex flex-col items-center justify-center py-2">
          <button
           onClick={sosActive ? () => setSosActive(false) : triggerSOS}
@@ -350,13 +277,10 @@ function HomeTab({ user, userData, mode }: { user: any, userData: any, mode: Use
             <p className="text-xs text-emerald-500">Active Baby</p>
          </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// =========================================================================
-// 🩺 CARE TAB (Symptom Cam + Fresh Chat)
-// =========================================================================
 function CareTab({ user }: { user: any }) {
   const [messages, setMessages] = useState<any[]>([]); 
   const [input, setInput] = useState("");
@@ -386,7 +310,7 @@ function CareTab({ user }: { user: any }) {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] space-y-4">
+    <div className="flex flex-col h-[calc(100vh-140px)] space-y-4 animate-in slide-in-from-right-5">
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
         <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
           <Camera size={18} className="text-rose-500"/> AI Symptom Check
@@ -432,16 +356,13 @@ function CareTab({ user }: { user: any }) {
   );
 }
 
-// =========================================================================
-// 🥦 NUTRITION & 👥 COMMUNITY & 👤 PROFILE
-// =========================================================================
 function NutritionTab() {
   const recommendations = [
     { item: "Spinach (Palong Shak)", price: "20৳", benefit: "High Iron", replace: "Apples (280৳)" },
     { item: "Lentils (Dal)", price: "110৳", benefit: "Protein", replace: "Chicken (190৳)" },
   ];
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-in slide-in-from-right-5">
        <div className="bg-emerald-600 p-6 rounded-2xl shadow-lg shadow-emerald-100 text-white">
           <h2 className="font-bold text-lg mb-1 flex items-center gap-2"><ShoppingBag/> Smart Market Guide</h2>
           <p className="text-emerald-100 text-sm">Save money, eat healthy.</p>
@@ -476,7 +397,7 @@ function CommunityTab({ user }: { user: any }) {
     });
   }, []);
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-in slide-in-from-right-5">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-black text-slate-800">Maa-to-Maa Forum</h2>
         <button className="bg-rose-500 text-white text-xs px-4 py-2 rounded-full font-bold shadow-md hover:bg-rose-600">+ Post</button>
@@ -510,7 +431,7 @@ function ProfileTab({ user, userData, logout }: any) {
 
   if (historyOpen) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 animate-in slide-in-from-right-5">
         <button onClick={() => setHistoryOpen(false)} className="flex items-center gap-2 text-slate-500 font-bold mb-4">
            <ChevronRight className="rotate-180"/> Back to Settings
         </button>
@@ -528,7 +449,7 @@ function ProfileTab({ user, userData, logout }: any) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-in slide-in-from-right-5">
        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 text-center relative overflow-hidden">
           <div className="h-20 w-20 bg-slate-100 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl font-bold text-slate-500">
              {user.displayName?.[0]}

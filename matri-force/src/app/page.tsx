@@ -20,8 +20,8 @@ export default function LandingPage() {
         className="text-center mb-12 z-10"
       >
         <div className="flex justify-center mb-4">
-          <div className="h-20 w-20 bg-white rounded-2xl flex items-center justify-center shadow-xl shadow-rose-100 ring-4 ring-rose-50 transform rotate-3">
-             <Heart className="text-rose-500 fill-rose-500" size={40} />
+          <div className="h-24 w-24 bg-white rounded-3xl flex items-center justify-center shadow-xl shadow-rose-100 ring-4 ring-rose-50 transform rotate-3">
+             <Heart className="text-rose-500 fill-rose-500" size={48} />
           </div>
         </div>
         <h1 className="text-5xl font-black text-slate-800 tracking-tight mb-3">
@@ -33,9 +33,9 @@ export default function LandingPage() {
       </motion.div>
 
       {/* Options Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl z-10">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl z-10">
         
-        {/* OPTION 1: MOTHER */}
+        {/* OPTION 1: MOTHER (Goes to /patient) */}
         <RoleCard 
           href="/patient"
           title="I am a Mother"
@@ -45,7 +45,7 @@ export default function LandingPage() {
           delay={0.1}
         />
 
-        {/* OPTION 2: DOCTOR */}
+        {/* OPTION 2: DOCTOR (Goes to /doctor) */}
         <RoleCard 
           href="/doctor"
           title="I am a Doctor"
@@ -55,7 +55,7 @@ export default function LandingPage() {
           delay={0.2}
         />
 
-        {/* OPTION 3: DRIVER */}
+        {/* OPTION 3: DRIVER (Goes to /driver) */}
         <RoleCard 
           href="/driver"
           title="I am a Driver"
@@ -111,22 +111,22 @@ function RoleCard({ href, title, desc, icon: Icon, color, delay }: any) {
         `}
       >
         <div className={`
-          h-16 w-16 rounded-2xl bg-slate-50 flex items-center justify-center mb-4 
+          h-20 w-20 rounded-2xl bg-slate-50 flex items-center justify-center mb-6 
           transition-colors duration-300 group-hover:bg-white/20
           ${iconColors[color]} group-hover:text-white
         `}>
-          <Icon size={32} />
+          <Icon size={36} />
         </div>
         
-        <h3 className="text-xl font-bold text-slate-800 mb-1 group-hover:text-white transition-colors">
+        <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-white transition-colors">
           {title}
         </h3>
-        <p className="text-sm text-slate-400 group-hover:text-white/80 transition-colors">
+        <p className="text-sm text-slate-400 group-hover:text-white/80 transition-colors mb-6">
           {desc}
         </p>
 
-        <div className="mt-6 h-8 w-8 rounded-full border-2 border-slate-100 flex items-center justify-center text-slate-300 group-hover:border-white/30 group-hover:text-white transition-all">
-           <ChevronRight size={16} />
+        <div className="h-10 w-10 rounded-full border-2 border-slate-100 flex items-center justify-center text-slate-300 group-hover:border-white/30 group-hover:text-white transition-all">
+           <ChevronRight size={20} />
         </div>
       </motion.div>
     </Link>
