@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     // 2. Initialize Gemini
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
     // 'gemini-1.5-flash' is fast, cheap/free, and handles images well.
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     // 3. Define System Instructions (Persona)
     const systemPrompt = `
