@@ -1,134 +1,169 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { Heart, Stethoscope, Ambulance, ChevronRight, ShieldCheck } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Heart, Stethoscope, Ambulance, ArrowRight, ShieldCheck, Activity, Users, Radio } from "lucide-react";
 
 export default function LandingPage() {
+  const [hoveredRole, setHoveredRole] = useState<string | null>(null);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-rose-50 flex flex-col items-center justify-center p-6 font-sans text-slate-900 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-rose-500/30 overflow-hidden relative flex flex-col">
       
-      {/* Background Decoration */}
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-100 rounded-full blur-3xl opacity-40 animate-pulse"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-rose-100 rounded-full blur-3xl opacity-40 animate-pulse delay-1000"></div>
-
-      {/* Hero Section */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        className="text-center mb-12 z-10"
-      >
-        <div className="flex justify-center mb-4">
-          <div className="h-24 w-24 bg-white rounded-3xl flex items-center justify-center shadow-xl shadow-rose-100 ring-4 ring-rose-50 transform rotate-3">
-             <Heart className="text-rose-500 fill-rose-500" size={48} />
-          </div>
-        </div>
-        <h1 className="text-5xl font-black text-slate-800 tracking-tight mb-3">
-          Matri-Force
-        </h1>
-        <p className="text-lg text-slate-500 font-medium max-w-md mx-auto leading-relaxed">
-          The Smart Maternal Health Safety Net for Bangladesh.
-        </p>
-      </motion.div>
-
-      {/* Options Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl z-10">
-        
-        {/* OPTION 1: MOTHER (Goes to /patient) */}
-        <RoleCard 
-          href="/patient"
-          title="I am a Mother"
-          desc="Access care, SOS & advice"
-          icon={Heart}
-          color="rose"
-          delay={0.1}
+      {/* --- Animated Background Grid --- */}
+      <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+        <motion.div 
+          animate={{ x: [0, 100, 0], y: [0, -50, 0] }} 
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute top-1/4 left-1/4 w-96 h-96 bg-rose-500/20 rounded-full blur-[128px]" 
         />
-
-        {/* OPTION 2: DOCTOR (Goes to /doctor) */}
-        <RoleCard 
-          href="/doctor"
-          title="I am a Doctor"
-          desc="Monitor & Triage Patients"
-          icon={Stethoscope}
-          color="emerald"
-          delay={0.2}
+        <motion.div 
+          animate={{ x: [0, -100, 0], y: [0, 50, 0] }} 
+          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+          className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-[128px]" 
         />
-
-        {/* OPTION 3: DRIVER (Goes to /driver) */}
-        <RoleCard 
-          href="/driver"
-          title="I am a Driver"
-          desc="Ambulance & Emergency"
-          icon={Ambulance}
-          color="blue"
-          delay={0.3}
-        />
-
       </div>
 
-      {/* Footer */}
-      <motion.div 
-        initial={{ opacity: 0 }} 
-        animate={{ opacity: 1 }} 
-        transition={{ delay: 0.5 }}
-        className="mt-16 text-center z-10"
-      >
-        <div className="flex items-center justify-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest">
-          <ShieldCheck size={14} />
-          <span>Secure & Encrypted Platform</span>
+      {/* --- Navigation / Brand --- */}
+      <nav className="relative z-20 w-full max-w-7xl mx-auto p-6 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 bg-gradient-to-br from-rose-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-rose-500/20">
+            <Heart size={18} className="text-white fill-white" />
+          </div>
+          <span className="font-bold text-xl tracking-tight text-white">Matri-Force</span>
         </div>
-      </motion.div>
+        <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-slate-500">
+          <span className="hidden md:flex items-center gap-1"><ShieldCheck size={14} className="text-emerald-500"/> Secure</span>
+          <span className="hidden md:flex items-center gap-1"><Activity size={14} className="text-blue-500"/> Live</span>
+        </div>
+      </nav>
+
+      {/* --- Main Content --- */}
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-6 w-full max-w-7xl mx-auto">
+        
+        {/* Hero Text */}
+        <div className="text-center mb-16 max-w-3xl">
+          <motion.h1 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-5xl md:text-7xl font-black text-white tracking-tight mb-6 leading-tight"
+          >
+            Universal <span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-400 to-orange-400">Maternal</span> <br/> Safety Net.
+          </motion.h1>
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto"
+          >
+            Connecting mothers, doctors, and emergency response units in one unified, real-time ecosystem.
+          </motion.p>
+        </div>
+
+        {/* Roles Grid - Bento Style */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full h-[500px] md:h-[400px]">
+          
+          {/* 1. MOTHER CARD */}
+          <RoleCard 
+            id="patient"
+            href="/patient"
+            title="Mother"
+            subtitle="Request Care & SOS"
+            icon={Heart}
+            color="rose"
+            hovered={hoveredRole}
+            setHovered={setHoveredRole}
+            bgImage="radial-gradient(circle at top right, rgba(244, 63, 94, 0.1), transparent)"
+          />
+
+          {/* 2. DOCTOR CARD */}
+          <RoleCard 
+            id="doctor"
+            href="/doctor"
+            title="Doctor"
+            subtitle="Monitor & Prescribe"
+            icon={Stethoscope}
+            color="emerald"
+            hovered={hoveredRole}
+            setHovered={setHoveredRole}
+            bgImage="radial-gradient(circle at top right, rgba(16, 185, 129, 0.1), transparent)"
+          />
+
+          {/* 3. DRIVER CARD */}
+          <RoleCard 
+            id="driver"
+            href="/driver"
+            title="Driver"
+            subtitle="Emergency Fleet"
+            icon={Ambulance}
+            color="blue"
+            hovered={hoveredRole}
+            setHovered={setHoveredRole}
+            bgImage="radial-gradient(circle at top right, rgba(59, 130, 246, 0.1), transparent)"
+          />
+
+        </div>
+
+      </main>
+
+      {/* Footer Info */}
+      <footer className="relative z-10 w-full p-6 text-center text-slate-600 text-xs">
+        <p>&copy; 2025 Matri-Force Initiative. AI-Powered Healthcare.</p>
+      </footer>
+
     </div>
   );
 }
 
-// --- Helper Component for Cards ---
-function RoleCard({ href, title, desc, icon: Icon, color, delay }: any) {
-  const colorStyles: any = {
-    rose: "hover:border-rose-400 hover:shadow-rose-100 group-hover:bg-rose-500 group-hover:text-white",
-    emerald: "hover:border-emerald-400 hover:shadow-emerald-100 group-hover:bg-emerald-500 group-hover:text-white",
-    blue: "hover:border-blue-400 hover:shadow-blue-100 group-hover:bg-blue-500 group-hover:text-white"
-  };
+// --- Unique Role Card Component ---
+function RoleCard({ id, href, title, subtitle, icon: Icon, color, hovered, setHovered, bgImage }: any) {
+  const isHovered = hovered === id;
+  const isDimmed = hovered !== null && hovered !== id;
 
-  const iconColors: any = {
-    rose: "text-rose-500",
-    emerald: "text-emerald-500",
-    blue: "text-blue-500"
+  // Dynamic Styles based on color prop
+  const colors: any = {
+    rose: { text: "text-rose-400", border: "group-hover:border-rose-500/50", glow: "group-hover:shadow-rose-500/20" },
+    emerald: { text: "text-emerald-400", border: "group-hover:border-emerald-500/50", glow: "group-hover:shadow-emerald-500/20" },
+    blue: { text: "text-blue-400", border: "group-hover:border-blue-500/50", glow: "group-hover:shadow-blue-500/20" }
   };
 
   return (
-    <Link href={href} className="block w-full">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ delay }}
-        className={`
-          group relative bg-white p-8 rounded-3xl shadow-sm border border-slate-100 
-          transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer
-          flex flex-col items-center text-center h-full justify-center
-          ${colorStyles[color]}
-        `}
-      >
-        <div className={`
-          h-20 w-20 rounded-2xl bg-slate-50 flex items-center justify-center mb-6 
-          transition-colors duration-300 group-hover:bg-white/20
-          ${iconColors[color]} group-hover:text-white
-        `}>
-          <Icon size={36} />
-        </div>
-        
-        <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-white transition-colors">
-          {title}
-        </h3>
-        <p className="text-sm text-slate-400 group-hover:text-white/80 transition-colors mb-6">
-          {desc}
-        </p>
+    <Link 
+      href={href}
+      className={`relative group overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 backdrop-blur-sm transition-all duration-500 ease-out ${colors[color].border} ${isDimmed ? 'opacity-40 scale-95 blur-[1px]' : 'opacity-100 scale-100'} hover:shadow-2xl ${colors[color].glow}`}
+      onMouseEnter={() => setHovered(id)}
+      onMouseLeave={() => setHovered(null)}
+      style={{ background: bgImage }}
+    >
+      <div className="absolute inset-0 bg-noise opacity-5"></div>
+      
+      <div className="h-full flex flex-col items-center justify-center p-8 relative z-10">
+        <motion.div 
+          animate={{ scale: isHovered ? 1.1 : 1, y: isHovered ? -10 : 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+          className={`p-5 rounded-2xl bg-slate-800/50 mb-6 ${colors[color].text}`}
+        >
+          <Icon size={40} strokeWidth={1.5} />
+        </motion.div>
 
-        <div className="h-10 w-10 rounded-full border-2 border-slate-100 flex items-center justify-center text-slate-300 group-hover:border-white/30 group-hover:text-white transition-all">
-           <ChevronRight size={20} />
-        </div>
-      </motion.div>
+        <h3 className="text-3xl font-bold text-white mb-2">{title}</h3>
+        <p className="text-slate-400 font-medium">{subtitle}</p>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: isHovered ? 1 : 0, y: isHovered ? 0 : 10 }}
+          className={`mt-8 flex items-center gap-2 text-sm font-bold uppercase tracking-wider ${colors[color].text}`}
+        >
+          Enter Portal <ArrowRight size={16} />
+        </motion.div>
+      </div>
+
+      {/* Decorative Hover Effect */}
+      <motion.div 
+        className={`absolute -bottom-20 -right-20 w-40 h-40 rounded-full blur-[80px] transition-colors duration-500 ${isHovered ? (color === 'rose' ? 'bg-rose-600' : color === 'emerald' ? 'bg-emerald-600' : 'bg-blue-600') : 'bg-transparent'}`} 
+      />
     </Link>
   );
 }
