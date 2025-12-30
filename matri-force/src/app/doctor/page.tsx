@@ -244,14 +244,30 @@ export default function DoctorConsole() {
                 {[...sosAlerts, ...generalAlerts].length === 0 && <p className="text-center text-slate-600 mt-10 text-xs">No Active Alerts</p>}
                 
                 {/* SOS Alerts */}
-                {sosAlerts.map(alert => (
-                  <div key={alert.id} onClick={()=>{setSelectedPatient({...alert, type: 'SOS'}); setMapCenter([alert.lat, alert.lng])}} 
-                    className={`p-3 rounded-xl border cursor-pointer ${selectedPatient?.id===alert.id ? 'bg-rose-950/40 border-rose-500' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
-                    <div className="flex justify-between mb-1"><span className="bg-rose-600 text-white text-[10px] px-2 rounded animate-pulse">SOS</span><span className="text-[10px] text-slate-400">Now</span></div>
-                    <h3 className="font-bold text-white text-sm">{alert.user_name}</h3>
-                    <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><MapPin size={10}/> Loc: {alert.lat.toFixed(4)}, {alert.lng.toFixed(4)}</p>
-                  </div>
-                ))}
+{sosAlerts.map(alert => (
+  <div key={alert.id} onClick={()=>{
+      // Safety check: ensure lat/lng exist before setting map center
+      const safeLat = alert.lat || 0;
+      const safeLng = alert.lng || 0;
+      setSelectedPatient({...alert, type: 'SOS'}); 
+      setMapCenter([safeLat, safeLng])
+    }} 
+    className={`p-3 rounded-xl border cursor-pointer ${selectedPatient?.id===alert.id ? 'bg-rose-950/40 border-rose-500' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
+    
+    <div className="flex justify-between mb-1">
+      <span className="bg-rose-600 text-white text-[10px] px-2 rounded animate-pulse">SOS</span>
+      <span className="text-[10px] text-slate-400">Now</span>
+    </div>
+    
+    <h3 className="font-bold text-white text-sm">{alert.user_name || "Unknown User"}</h3>
+    
+    {/* FIXED LINE BELOW: Added fallback (alert.lat || 0) */}
+    <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+      <MapPin size={10}/> 
+      Loc: {(alert.lat || 0).toFixed(4)}, {(alert.lng || 0).toFixed(4)}
+    </p>
+  </div>
+))}
 
                 {/* General Alerts (AI + Blood) */}
                 {generalAlerts.map(alert => (
