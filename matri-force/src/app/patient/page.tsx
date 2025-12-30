@@ -12,7 +12,7 @@ import {
   FilePlus, Clipboard, Moon, Sun, Paperclip, Mic,
   History, X, RefreshCw, Zap, Smile, Frown, Meh,
   Baby, Activity, BookOpen, PlayCircle, Video, Music, Edit,
-  AlertTriangle, PhoneCall
+  AlertTriangle, PhoneCall, UserPlus, FileCheck // Added UserPlus and FileCheck
 } from "lucide-react";
 import Link from "next/link"; 
 
@@ -159,7 +159,23 @@ const t = {
     name: "Name",
     phone: "Phone Number",
     relation: "Relation (e.g. Husband)",
-    safety_net: "Safety Network"
+    safety_net: "Safety Network",
+    req_blood: "Request Blood",
+    blood_needed: "Blood Needed",
+    select_group: "Select Group",
+    send_req: "Send Request",
+    req_sent: "Blood Request Sent!",
+    // --- NEW CARE TAB TRANSLATIONS ---
+    select_doc: "Select Doctor",
+    available_docs: "Available Doctors",
+    my_appt: "My Appointments",
+    prescriptions: "Prescriptions",
+    view_rx: "View Prescriptions",
+    no_docs: "No doctors available",
+    doc_speciality: "Speciality",
+    book_new: "Book New",
+    dosage: "Dosage",
+    doctor_note: "Doctor Note"
   },
   bn: {
     welcome_back: "স্বাগতম",
@@ -280,7 +296,23 @@ const t = {
     name: "নাম",
     phone: "ফোন নম্বর",
     relation: "সম্পর্ক (যেমন: স্বামী)",
-    safety_net: "নিরাপত্তা নেটওয়ার্ক"
+    safety_net: "নিরাপত্তা নেটওয়ার্ক",
+    req_blood: "রক্ত প্রয়োজন",
+    blood_needed: "রক্তের গ্রুপ প্রয়োজন",
+    select_group: "গ্রুপ নির্বাচন করুন",
+    send_req: "অনুরোধ পাঠান",
+    req_sent: "রক্তের অনুরোধ পাঠানো হয়েছে!",
+    // --- NEW CARE TAB TRANSLATIONS ---
+    select_doc: "ডাক্তার নির্বাচন",
+    available_docs: "উপলব্ধ ডাক্তার",
+    my_appt: "আমার অ্যাপয়েন্টমেন্ট",
+    prescriptions: "প্রেসক্রিপশন",
+    view_rx: "প্রেসক্রিপশন দেখুন",
+    no_docs: "কোন ডাক্তার নেই",
+    doc_speciality: "বিশেষজ্ঞ",
+    book_new: "নতুন বুকিং",
+    dosage: "মাত্রা",
+    doctor_note: "ডাক্তারের পরামর্শ"
   }
 };
 
@@ -294,32 +326,46 @@ export default function PatientApp() {
   const [darkMode, setDarkMode] = useState(false);
   const [lang, setLang] = useState<Lang>("en");
 
-  // --- Auth & Listener ---
+  // --- Fixed Auth Listener ---
   useEffect(() => {
     const savedTheme = localStorage.getItem("matri_theme");
     if (savedTheme === "dark") setDarkMode(true);
 
-    const unsub = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
-        setUser(currentUser);
-        const docRef = doc(db, "users", currentUser.uid);
-        const docSnap = await getDoc(docRef);
-        
-        // RTDB Listener for Savings
-        const savingsRef = ref(rtdb, `users/${currentUser.uid}/savings`);
-        onValue(savingsRef, (snap) => {
-           const savings = snap.val();
-           const data = docSnap.exists() ? docSnap.data() : {};
-           setUserData((prev: any) => ({ ...prev, ...data, savings: savings || { current: 0, goal: 5000 } }));
-           if(data.stage) setAppStage(data.stage);
+        // 🔥 Realtime Listener for Role Verification
+        const unsubDoc = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.role === 'patient') {
+              setUser(currentUser);
+              setUserData(data);
+              if(data.stage) setAppStage(data.stage);
+              
+              // Load Savings
+              const savingsRef = ref(rtdb, `users/${currentUser.uid}/savings`);
+              onValue(savingsRef, (snap) => {
+                 const savings = snap.val();
+                 setUserData((prev: any) => ({ ...prev, savings: savings || { current: 0, goal: 5000 } }));
+              });
+            } else {
+              // Wrong Role
+              signOut(auth);
+              alert("Access Denied: Please use the Doctor App.");
+              setUser(null);
+            }
+          }
+          // If doc doesn't exist yet (during signup), we wait.
+          setLoading(false);
         });
+        return () => unsubDoc();
       } else {
         setUser(null);
         setUserData(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return () => unsub();
+    return () => unsubAuth();
   }, []);
 
   const toggleTheme = () => {
@@ -407,6 +453,7 @@ function AuthScreen({ darkMode, lang, toggleLang }: { darkMode: boolean, lang: L
       } else {
         const res = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(res.user, { displayName: name });
+        // FORCE ROLE: PATIENT
         await setDoc(doc(db, "users", res.user.uid), { name, email, role: "patient", gestationWeek: 12, stage: "pregnancy", createdAt: new Date().toISOString() });
         await set(ref(rtdb, `users/${res.user.uid}/savings`), { current: 0, goal: 5000 });
       }
@@ -455,6 +502,10 @@ function HomeTab({ user, userData, mode, stage, darkMode, lang }: { user: any; u
   const [feedCount, setFeedCount] = useState(0);
   const [diaperCount, setDiaperCount] = useState(0);
   const [contacts, setContacts] = useState<any[]>([]);
+  
+  // Blood Request State
+  const [showBloodModal, setShowBloodModal] = useState(false);
+  const [bloodGroup, setBloodGroup] = useState("O+");
 
   const savings = userData?.savings || { current: 0, goal: 5000 };
   const percentage = Math.min(100, (savings.current / savings.goal) * 100);
@@ -469,34 +520,55 @@ function HomeTab({ user, userData, mode, stage, darkMode, lang }: { user: any; u
 
   const addDeposit = async () => { await update(ref(rtdb, `users/${user.uid}/savings`), { current: increment(50) }); };
 
+  // --- BLOOD REQUEST FUNCTION ---
+  const handleBloodRequest = async () => {
+    if (!navigator.geolocation) return alert("Enable GPS!");
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        
+        // 1. Push to Doctor Alerts (Realtime)
+        await push(ref(rtdb, 'doctor_alerts'), {
+            type: 'BLOOD_REQ',
+            patientId: user.uid,
+            patientName: user.displayName,
+            phone: userData?.phone || "N/A",
+            message: `URGENT: ${bloodGroup} Blood Required at Location.`,
+            location: { lat: latitude, lng: longitude },
+            timestamp: Date.now(),
+            status: 'unresolved'
+        });
+
+        // 2. Log in Firestore
+        await addDoc(collection(db, "blood_requests"), {
+            patientId: user.uid,
+            bloodGroup,
+            status: "pending",
+            timestamp: Date.now()
+        });
+
+        alert(t[lang].req_sent);
+        setShowBloodModal(false);
+    });
+  };
+
   const triggerSOS = async () => {
     if (!navigator.geolocation) return alert("Enable GPS!");
-    
-    // Get Contacts
     const contactsSnap = await getDocs(collection(db, "users", user.uid, "contacts"));
     const contactsList = contactsSnap.docs.map(d => d.data());
 
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
-      
       if (navigator.onLine) {
-        // 1. Alert Map System
         await set(ref(rtdb, `sos_alerts/${user.uid}`), {
           lat: latitude, lng: longitude, status: "RED", timestamp: Date.now(), 
           user_name: user.displayName, phone: userData?.phone || user.email,
           notified_contacts: contactsList
         });
-
-        // 2. Alert Doctor Dashboard
         await push(ref(rtdb, 'doctor_alerts'), {
-          type: 'SOS_EMERGENCY',
-          patientId: user.uid,
-          patientName: user.displayName,
+          type: 'SOS_EMERGENCY', patientId: user.uid, patientName: user.displayName,
           message: `SOS Triggered! Location: ${latitude}, ${longitude}. Contacts notified.`,
-          timestamp: Date.now(),
-          status: 'unresolved'
+          timestamp: Date.now(), status: 'unresolved'
         });
-
         setSosActive(true);
       } else {
         const smsBody = `SOS! I need help. Location: https://maps.google.com/?q=${latitude},${longitude}`;
@@ -506,6 +578,25 @@ function HomeTab({ user, userData, mode, stage, darkMode, lang }: { user: any; u
   };
 
   const cardClass = `p-4 rounded-2xl shadow-sm border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`;
+
+  // --- BLOOD MODAL ---
+  if (showBloodModal) return (
+      <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 animate-in fade-in">
+          <div className={`w-full max-w-sm rounded-2xl p-6 ${darkMode ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
+              <h2 className="text-xl font-bold text-rose-500 mb-4 flex items-center gap-2"><Droplet fill="currentColor"/> {t[lang].req_blood}</h2>
+              <label className="text-sm font-bold opacity-60 mb-2 block">{t[lang].select_group}</label>
+              <div className="grid grid-cols-4 gap-2 mb-6">
+                  {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(bg => (
+                      <button key={bg} onClick={()=>setBloodGroup(bg)} className={`py-2 rounded-lg text-sm font-bold border ${bloodGroup === bg ? 'bg-rose-500 text-white border-rose-500' : 'border-slate-300 text-slate-500'}`}>
+                          {bg}
+                      </button>
+                  ))}
+              </div>
+              <button onClick={handleBloodRequest} className="w-full bg-rose-600 text-white py-3 rounded-xl font-bold mb-2 shadow-lg shadow-rose-500/30">{t[lang].send_req}</button>
+              <button onClick={()=>setShowBloodModal(false)} className="w-full py-3 text-sm opacity-60">{t[lang].cancel}</button>
+          </div>
+      </div>
+  );
 
   // --- GUARDIAN MODE ---
   if (mode === "guardian") {
@@ -608,21 +699,25 @@ function HomeTab({ user, userData, mode, stage, darkMode, lang }: { user: any; u
       </div>
 
       {/* 🚨 SOS */}
-      <div className="flex justify-center py-2">
+      <div className="flex justify-center gap-3 py-2">
+         {/* SOS BUTTON */}
          <button 
           onClick={sosActive ? () => setSosActive(false) : triggerSOS} 
           className={`
-            relative w-44 h-44 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-2xl
+            relative w-32 h-32 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-2xl
             ${sosActive ? "bg-red-600 shadow-red-500/50 animate-pulse ring-4 ring-red-400" : "bg-slate-800 dark:bg-slate-700 shadow-slate-900/20 ring-4 ring-white dark:ring-slate-800"}
           `}
         >
           <div className="text-center text-white z-10 flex flex-col items-center">
-            <Shield size={36} className="mb-2" />
-            <span className="text-2xl font-black tracking-widest block">{t[lang].sos}</span>
-            <span className="text-[10px] opacity-70 uppercase font-bold mt-1">
-              {sosActive ? t[lang].sending_help : t[lang].hold_help}
-            </span>
+            <Shield size={28} className="mb-1" />
+            <span className="text-xl font-black tracking-widest block">{t[lang].sos}</span>
           </div>
+        </button>
+
+        {/* 🩸 BLOOD REQUEST BUTTON */}
+        <button onClick={()=>setShowBloodModal(true)} className="w-32 h-32 rounded-full bg-white dark:bg-slate-800 border-4 border-rose-500 flex flex-col items-center justify-center shadow-lg active:scale-95 transition-all text-rose-500">
+            <Droplet size={28} className="mb-1 fill-rose-500"/>
+            <span className="text-xs font-bold text-center leading-tight">{t[lang].req_blood}</span>
         </button>
       </div>
 
@@ -774,142 +869,242 @@ function WellnessTab({ user, darkMode, stage, lang }: { user: any; darkMode: boo
 }
 
 // =========================================================================
-// 💬 CARE TAB (AI SENTINEL - CRITICAL ALERTS)
+// 💬 CARE TAB (UPDATED: Advanced Doctor + AI Flow)
 // =========================================================================
-function CareTab({ user, darkMode, lang, userData }: { user: any, darkMode: boolean, lang: Lang, userData: any }) {
-  const [mode, setMode] = useState<ChatMode>("ai");
+function CareTab({ user, darkMode, lang, userData }: { user: any; darkMode: boolean; lang: Lang; userData: any }) {
+  // Navigation State
+  const [view, setView] = useState<'menu' | 'doctor_list' | 'chat' | 'appointments' | 'rx'>('menu');
+   
+  // Chat State
+  const [mode, setMode] = useState<ChatMode>("ai"); 
   const [messages, setMessages] = useState<any[]>([]); 
   const [input, setInput] = useState("");
-  const [booking, setBooking] = useState(false);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const bottomRef = useRef<any>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+   
+  // Appointment & Prescription State
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [isBooking, setIsBooking] = useState(false);
+  const [bookReason, setBookReason] = useState("");
+  const [bookDate, setBookDate] = useState("");
 
-  useEffect(() => { setMessages([]); }, [mode]);
-
-  // Realtime Doctor Chat Listener
+  // 1. Fetch Available Doctors (Role = doctor)
   useEffect(() => {
-    if (mode === "doctor") {
-      const chatRef = ref(rtdb, `chats/${user.uid}`);
-      return onValue(chatRef, (snap) => {
-        const data = snap.val();
-        if (data) {
-          setMessages(Object.values(data));
-          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-        }
-      });
+    if (view === 'doctor_list') {
+      const q = query(collection(db, "users"), where("role", "==", "doctor"));
+      getDocs(q).then(snap => setDoctors(snap.docs.map(d => ({id: d.id, ...d.data()}))));
     }
-  }, [mode, user.uid]);
+  }, [view]);
 
-  const checkCriticalCondition = async (text: string) => {
-    const dangerKeywords = ["bleeding", "blood", "severe pain", "fainted", "no movement", "headache", "blurred vision", "vomiting"];
-    if (dangerKeywords.some(keyword => text.toLowerCase().includes(keyword))) {
-      // 🚨 CRITICAL ALERT TO DOCTOR DASHBOARD 🚨
-      await push(ref(rtdb, 'doctor_alerts'), {
-        type: 'CRITICAL_AI_FLAG',
-        patientId: user.uid,
-        patientName: user.displayName,
-        phone: userData?.phone || "N/A",
-        message: text,
-        timestamp: Date.now(),
-        status: 'unresolved'
-      });
-      alert(t[lang].alert_sent);
+  // 2. Real-time Listeners (Chat, Appointments, Prescriptions)
+ // 2. Real-time Listeners (Chat, Appointments, Prescriptions)
+  useEffect(() => {
+    // Chat Listener
+    if (view === 'chat') { 
+      if (selectedDoc) {
+        // CASE A: DOCTOR CHAT -> Listen to Firebase History
+        const chatRef = ref(rtdb, `chats/${user.uid}`);
+        return onValue(chatRef, (snap) => {
+          const data = snap.val();
+          if (data) { 
+            setMessages(Object.values(data)); 
+            setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100); 
+          }
+        });
+      } else {
+        // CASE B: AI CHAT -> Clear History (Start Fresh)
+        setMessages([]);
+      }
     }
-  };
 
-  const sendMessage = async (text: string = input, img: string | null = null) => {
-    if (!text.trim() && !img) return;
-    const userMsg = { role: "user", content: text, image: img, timestamp: Date.now() };
+    // Appointments Listener
+    if (view === 'appointments') {
+      const q = query(collection(db, "appointments"), where("patientId", "==", user.uid), orderBy("timestamp", "desc"));
+      const unsub = onSnapshot(q, (snap) => setAppointments(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+      return () => unsub();
+    }
+
+    // Prescriptions Listener
+    if (view === 'rx') {
+      const q = query(collection(db, "users", user.uid, "prescriptions"), orderBy("timestamp", "desc"));
+      getDocs(q).then(snap => setPrescriptions(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+    }
+  }, [view, user.uid, selectedDoc]); // <--- IMPORTANT: Added selectedDoc to dependencies
+
+  // 3. Send Message Logic (AI vs Doctor)
+  const sendMessage = async () => {
+    if (!input.trim()) return;
+    const userMsg = { role: "user", content: input, timestamp: Date.now() };
     setInput("");
     
-    // Save to History
-    await addDoc(collection(db, "users", user.uid, "chat_history"), userMsg);
-
-    // Check for Danger Signs (Sentinel)
-    await checkCriticalCondition(text);
-
-    if (mode === "ai") {
-      setMessages(prev => [...prev, userMsg]);
-      try {
-        const res = await fetch("/api/chat", { method: "POST", body: JSON.stringify({ message: userMsg.content, imageBase64: img }) });
+    // Safety Check: Alert Doctor if critical words found
+    if (["bleeding", "pain", "fainted"].some(w => userMsg.content.includes(w))) {
+       await push(ref(rtdb, 'doctor_alerts'), { 
+         type: 'CRITICAL_AI_FLAG', 
+         patientId: user.uid, 
+         patientName: user.displayName, 
+         message: userMsg.content, 
+         timestamp: Date.now() 
+       });
+       alert("Doctor notified of emergency symptoms.");
+    }
+    
+    if (selectedDoc) {
+       // Send to Realtime DB for Doctor
+       await push(ref(rtdb, `chats/${user.uid}`), userMsg);
+    } else {
+       // Simulate AI Response
+       setMessages(prev => [...prev, userMsg]);
+       try {
+        const res = await fetch("/api/chat", { method: "POST", body: JSON.stringify({ message: userMsg.content }) });
         const data = await res.json();
         setMessages(prev => [...prev, { role: "ai", content: data.reply, timestamp: Date.now() }]);
-      } catch (e) {
-        setMessages(prev => [...prev, { role: "ai", content: "AI Offline.", timestamp: Date.now() }]);
-      }
-    } else {
-      await push(ref(rtdb, `chats/${user.uid}`), userMsg);
+       } catch (e) {
+        setMessages(prev => [...prev, { role: "ai", content: "AI is offline. Please select a doctor.", timestamp: Date.now() }]);
+       }
     }
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => sendMessage("", reader.result as string);
-    reader.readAsDataURL(file);
+  // 4. Book Appointment Logic
+  const handleBookAppointment = async () => {
+    if(!bookDate || !bookReason) return;
+    await addDoc(collection(db, "appointments"), {
+      patientId: user.uid, 
+      patientName: user.displayName, 
+      date: bookDate, 
+      reason: bookReason, 
+      status: 'pending', 
+      timestamp: Date.now()
+    });
+    setIsBooking(false); 
+    setBookDate(""); 
+    setBookReason(""); 
+    alert("Appointment Request Sent to Doctor!");
   };
 
-  if (booking) return (
-    <div className="space-y-4 animate-in slide-in-from-right-5">
-      <button onClick={() => setBooking(false)} className="flex items-center gap-2 font-bold mb-2 opacity-60"><ArrowLeft size={16}/> {t[lang].back}</button>
-      <h2 className="font-bold text-lg">{t[lang].find_doc}</h2>
-      {[{name:"Dr. Ayesha", spec:"Gynecology"}, {name:"Dr. Karim", spec:"Pediatrics"}].map((d,i) => (
-         <div key={i} className={`p-4 rounded-xl border flex justify-between items-center ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-            <div><h3 className="font-bold">{d.name}</h3><p className="text-xs opacity-60">{d.spec}</p></div>
-            <button onClick={()=>{sendMessage(`${t[lang].request_appt} ${d.name}`); setBooking(false);}} className="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold">{t[lang].book}</button>
+  // --- RENDER VIEWS ---
+
+  // A. Main Care Menu
+  if (view === 'menu') return (
+      <div className="space-y-4 animate-in slide-in-from-right-5 mt-4">
+         <button onClick={() => setView('doctor_list')} className={`w-full p-6 rounded-2xl flex items-center gap-4 shadow-lg ${darkMode ? 'bg-indigo-900/50' : 'bg-indigo-50 border border-indigo-100'}`}>
+            <div className="h-12 w-12 rounded-full bg-indigo-500 flex items-center justify-center text-white"><UserPlus size={24}/></div>
+            <div className="text-left"><h3 className="font-bold text-lg">{t[lang].select_doc}</h3><p className="text-xs opacity-60">{t[lang].available_docs}</p></div>
+         </button>
+         <button onClick={() => setView('appointments')} className={`w-full p-6 rounded-2xl flex items-center gap-4 shadow-lg ${darkMode ? 'bg-emerald-900/50' : 'bg-emerald-50 border border-emerald-100'}`}>
+            <div className="h-12 w-12 rounded-full bg-emerald-500 flex items-center justify-center text-white"><Calendar size={24}/></div>
+            <div className="text-left"><h3 className="font-bold text-lg">{t[lang].my_appt}</h3><p className="text-xs opacity-60">Book & Track Status</p></div>
+         </button>
+         <button onClick={() => setView('rx')} className={`w-full p-6 rounded-2xl flex items-center gap-4 shadow-lg ${darkMode ? 'bg-blue-900/50' : 'bg-blue-50 border border-blue-100'}`}>
+            <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center text-white"><FileCheck size={24}/></div>
+            <div className="text-left"><h3 className="font-bold text-lg">{t[lang].prescriptions}</h3><p className="text-xs opacity-60">{t[lang].view_rx}</p></div>
+         </button>
+         <button onClick={() => { setSelectedDoc(null); setView('chat'); }} className={`w-full p-6 rounded-2xl flex items-center gap-4 shadow-lg opacity-60 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+            <div className="h-12 w-12 rounded-full bg-slate-500 flex items-center justify-center text-white"><Smartphone size={24}/></div>
+            <div className="text-left"><h3 className="font-bold text-lg">AI Assistant</h3><p className="text-xs opacity-60">Quick Medical Help</p></div>
+         </button>
+      </div>
+  );
+
+  // B. Doctor List View
+  if (view === 'doctor_list') return (
+      <div className="space-y-4 animate-in slide-in-from-right-5">
+         <button onClick={() => setView('menu')} className="flex items-center gap-2 font-bold opacity-60 mb-4"><ArrowLeft size={16}/> {t[lang].back}</button>
+         <h2 className="font-bold text-lg">{t[lang].available_docs}</h2>
+         <div className="space-y-3">
+            {doctors.length === 0 && <p className="text-center opacity-50 text-xs py-10">{t[lang].no_docs}</p>}
+            {doctors.map(doc => (
+               <div key={doc.id} onClick={() => { setSelectedDoc(doc); setView('chat'); }} className={`p-4 rounded-xl border flex items-center gap-4 cursor-pointer hover:border-emerald-500 transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                  <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold">{doc.name?.[0]}</div>
+                  <div><h3 className="font-bold">{doc.name}</h3><p className="text-xs opacity-60">{t[lang].doc_speciality || 'Medical Officer'}</p></div>
+                  <div className="ml-auto bg-green-500 h-2 w-2 rounded-full"></div>
+               </div>
+            ))}
          </div>
-      ))}
+      </div>
+  );
+
+  // C. Appointments View
+  if (view === 'appointments') return (
+    <div className="space-y-4 animate-in slide-in-from-right-5">
+       <div className="flex justify-between items-center">
+         <button onClick={() => setView('menu')} className="flex items-center gap-2 font-bold opacity-60"><ArrowLeft size={16}/> {t[lang].back}</button>
+         <button onClick={() => setIsBooking(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><Plus size={14}/> {t[lang].book_new}</button>
+       </div>
+       <h2 className="font-bold text-lg">{t[lang].my_appt}</h2>
+       {isBooking && (
+         <div className={`p-4 rounded-xl border animate-in fade-in ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <h3 className="font-bold text-sm mb-3">Request Appointment</h3>
+            <input type="date" className="w-full p-2 mb-2 rounded border text-sm dark:bg-slate-900" value={bookDate} onChange={e=>setBookDate(e.target.value)} />
+            <input className="w-full p-2 mb-2 rounded border text-sm dark:bg-slate-900" placeholder="Reason (e.g. Headache)" value={bookReason} onChange={e=>setBookReason(e.target.value)} />
+            <div className="flex gap-2">
+               <button onClick={handleBookAppointment} className="flex-1 bg-emerald-600 text-white py-2 rounded text-xs font-bold">Submit</button>
+               <button onClick={()=>setIsBooking(false)} className="px-4 py-2 border rounded text-xs">Cancel</button>
+            </div>
+         </div>
+       )}
+       <div className="space-y-3">
+         {appointments.map(appt => (
+           <div key={appt.id} className={`p-4 rounded-xl border flex justify-between items-center ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+              <div>
+                 <div className="flex items-center gap-2"><Calendar size={14} className="opacity-50"/><span className="font-bold text-sm">{new Date(appt.date).toLocaleDateString()}</span></div>
+                 <p className="text-xs opacity-60 mt-1">{appt.reason}</p>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-1 rounded ${appt.status==='confirmed'?'bg-emerald-100 text-emerald-600':appt.status==='rejected'?'bg-red-100 text-red-600':'bg-yellow-100 text-yellow-600'}`}>{appt.status.toUpperCase()}</span>
+           </div>
+         ))}
+       </div>
     </div>
   );
 
+  // D. Prescription View
+  if (view === 'rx') return (
+    <div className="space-y-4 animate-in slide-in-from-right-5">
+       <button onClick={() => setView('menu')} className="flex items-center gap-2 font-bold opacity-60 mb-2"><ArrowLeft size={16}/> {t[lang].back}</button>
+       <h2 className="font-bold text-lg mb-4">{t[lang].prescriptions}</h2>
+       <div className="space-y-3">
+          {prescriptions.length === 0 && <p className="text-center opacity-50 text-xs">No records found.</p>}
+          {prescriptions.map((rx, i) => (
+             <div key={i} className={`p-4 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                <div className="flex justify-between items-start mb-2">
+                   <h3 className="font-bold text-emerald-600 flex items-center gap-2"><Pill size={16}/> {rx.medicine}</h3>
+                   <span className="text-[10px] opacity-50">{new Date(rx.timestamp).toLocaleDateString()}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                   <div className="p-2 rounded bg-slate-100 dark:bg-slate-800"><span className="opacity-50 block">{t[lang].dosage}</span><b>{rx.dosage}</b></div>
+                   <div className="p-2 rounded bg-slate-100 dark:bg-slate-800"><span className="opacity-50 block">{t[lang].doctor_note}</span><b>{rx.doctor || "Dr. On Call"}</b></div>
+                </div>
+             </div>
+          ))}
+       </div>
+    </div>
+  );
+
+  // E. Chat View (Default for 'chat')
   return (
     <div className="flex flex-col h-[calc(100vh-140px)] space-y-2 relative">
-      <div className={`flex p-1 rounded-xl border shrink-0 ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-        <button onClick={() => setMode("ai")} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 ${mode==='ai'?'bg-rose-500 text-white':'opacity-50'}`}>
-           <Smartphone size={14}/> {t[lang].ask_ai}
-        </button>
-        <button onClick={() => setMode("doctor")} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 ${mode==='doctor'?'bg-emerald-600 text-white':'opacity-50'}`}>
-           <Stethoscope size={14}/> {t[lang].live_doc}
-        </button>
+      <div className="flex justify-between items-center px-2">
+        <button onClick={() => setView('menu')} className="flex items-center gap-2 font-bold opacity-60 text-xs"><ArrowLeft size={14}/> {t[lang].back}</button>
+        {selectedDoc ? <span className="text-xs font-bold text-emerald-600">Chatting with {selectedDoc.name}</span> : <span className="text-xs font-bold text-slate-500">AI Assistant</span>}
       </div>
 
       <div className={`flex-1 rounded-2xl border overflow-hidden relative flex flex-col ${darkMode ? 'bg-[#0b141a] border-slate-800' : 'bg-[#e5ddd5] border-slate-200'}`}>
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-           {messages.length === 0 && (
-             <div className="text-center mt-10 opacity-40">
-               <p className="text-xs font-bold mb-4">{mode === 'ai' ? t[lang].start_chat_ai : t[lang].start_chat_doc}</p>
-               {mode === 'doctor' && (
-                 <div className="flex justify-center gap-2">
-                   <button onClick={() => setBooking(true)} className="bg-white text-emerald-600 px-4 py-2 rounded-full text-xs font-bold shadow-sm border border-emerald-200">{t[lang].appt_btn}</button>
-                   <button className="bg-white text-blue-600 px-4 py-2 rounded-full text-xs font-bold shadow-sm border border-blue-200">{t[lang].video_btn}</button>
-                 </div>
-               )}
+           {messages.length === 0 && <p className="text-center mt-10 opacity-40 text-xs">Start messaging...</p>}
+           {messages.map((m, i) => (
+             <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'}`}>
+               <div className={`max-w-[80%] p-2 px-3 text-sm rounded-lg shadow-sm ${m.role==='user'?(darkMode?'bg-[#005c4b] text-white':'bg-[#d9fdd3] text-slate-900'):(darkMode?'bg-[#202c33] text-white':'bg-white text-slate-900')}`}>{m.content}</div>
              </div>
-           )}
-           {messages.map((m, i) => {
-             const isUser = m.role === 'user';
-             return (
-               <div key={i} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                 <div className={`max-w-[80%] p-2 px-3 text-sm rounded-lg shadow-sm relative ${isUser ? (darkMode ? 'bg-[#005c4b] text-white' : 'bg-[#d9fdd3] text-slate-900') : (darkMode ? 'bg-[#202c33] text-white' : 'bg-white text-slate-900')}`}>
-                   {m.image && <img src={m.image} alt="attachment" className="w-full rounded-lg mb-2 max-h-40 object-cover" />}
-                   {m.content}
-                   <span className="text-[9px] opacity-60 block text-right mt-1">{new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-                 </div>
-               </div>
-             )
-           })}
+           ))}
            <div ref={bottomRef} />
         </div>
-
         <div className={`p-2 flex gap-2 items-center shrink-0 ${darkMode ? 'bg-[#202c33]' : 'bg-[#f0f2f5]'}`}>
-          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
-          <button onClick={() => fileInputRef.current?.click()} className="p-2 opacity-60 hover:opacity-100"><Paperclip size={20}/></button>
           <div className={`flex-1 rounded-full px-4 py-2 flex items-center ${darkMode ? 'bg-[#2a3942]' : 'bg-white'}`}>
             <input className="flex-1 bg-transparent text-sm outline-none text-slate-900 dark:text-white" placeholder={t[lang].type_msg} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()}/>
           </div>
-          <button onClick={() => sendMessage(input)} className={`h-10 w-10 flex items-center justify-center rounded-full text-white shadow-sm ${input.trim() ? 'bg-[#00a884]' : 'bg-slate-400'}`}><Send size={18}/></button>
+          <button onClick={sendMessage} className="h-10 w-10 flex items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm"><Send size={18}/></button>
         </div>
       </div>
     </div>
@@ -948,18 +1143,15 @@ function CommunityTab({ user, darkMode, lang }: { user: any, darkMode: boolean, 
   );
 }
 
-// =========================================================================
-// 👤 PROFILE TAB (Settings, Reminders, Contacts)
-// =========================================================================
 function ProfileTab({ user, userData, logout, darkMode, setDarkMode, toggleTheme, appStage, setAppStage, lang }: { user: any; userData: any; logout: () => void; darkMode: boolean; setDarkMode: any; toggleTheme: () => void; appStage: AppStage; setAppStage: any; lang: Lang; }) {
   const [view, setView] = useState('main');
   const [history, setHistory] = useState<any[]>([]);
   const [newReminder, setNewReminder] = useState({ title: "", time: "08:00", type: "med" });
-  const [newContact, setNewContact] = useState({ name: "", phone: "", relation: "" });
   const [reminders, setReminders] = useState<any[]>([]);
-  const [contacts, setContacts] = useState<any[]>([]);
   const [lmp, setLmp] = useState(userData?.lmp || "");
   const [vitals, setVitals] = useState({ bp: "", weight: "", sugar: "" });
+  const [newContact, setNewContact] = useState({ name: "", phone: "", relation: "" });
+  const [contacts, setContacts] = useState<any[]>([]);
 
   useEffect(() => {
     if (view === 'history') { const q = query(collection(db, "users", user.uid, "chat_history"), orderBy("timestamp", "desc")); getDocs(q).then(snap => setHistory(snap.docs.map(d => d.data()))); }
